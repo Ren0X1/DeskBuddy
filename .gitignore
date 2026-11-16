@@ -1,0 +1,21 @@
+# secrets (Wi-Fi + OTA password)
+firmware/include/secrets.h
+firmware/secrets.ini
+
+# build output
+firmware/.pio/
+firmware/.vscode/
+
+# original vendor firmware dump (4 MB, not ours)
+backup/
+
+# source fonts are downloaded by tools/fontgen.py
+tools/fonts/
+
+# agent runtime
+agent/agent.log
+__pycache__/
+*.pyc
+
+# misc
+screenshots/

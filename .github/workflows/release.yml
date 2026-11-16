@@ -1,0 +1,93 @@
+name: 🚀 Release
+
+# Push a tag like v2.0.0 to build and publish a release:
+#   git tag v2.0.0 && git push origin v2.0.0
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v2.0.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 📦 Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
+
+      - name: 🧰 Install tools
+        run: pip install platformio esptool
+
+      - name: 🏗️ Build firmware ${{ env.TAG }}
+        working-directory: firmware
+        run: |
+          export PLATFORMIO_BUILD_FLAGS="-DFW_VERSION=\\\"${TAG}\\\""
+          pio run -e usb
+
+      - name: 🧩 Package
+        run: |
+          mkdir dist
+          B=firmware/.pio/build/usb
+          BOOT_APP0=~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin
+          # one image to flash at 0x0 on a fresh/stock board
+          python -m esptool --chip esp32c3 merge-bin -o dist/deskbuddy-${TAG}-full.bin \
+            --flash-mode dio --flash-freq 80m --flash-size 4MB \
+            0x0 $B/bootloader.bin 0x8000 $B/partitions.bin 0xe000 $BOOT_APP0 0x10000 $B/firmware.bin
+          # app only, for Wi-Fi (OTA) updates
+          cp $B/firmware.bin dist/deskbuddy-${TAG}-ota.bin
+          # Windows PC agent
+          (cd agent && zip -r ../dist/deskbuddy-agent-${TAG}.zip deskbuddy_agent.py requirements.txt install_autostart.ps1)
+          ls -la dist
+
+      - name: 📝 Release notes
+        run: |
+          cat > notes.md <<EOF
+          ## 📦 Files
+
+          | File | What it's for |
+          |---|---|
+          | \`deskbuddy-${TAG}-full.bin\` | 🔌 **First install** over USB, flash at \`0x0\` |
+          | \`deskbuddy-${TAG}-ota.bin\` | 📶 **Update over Wi-Fi** (already running DeskBuddy) |
+          | \`deskbuddy-agent-${TAG}.zip\` | 🖥️ Windows PC agent |
+
+          ### 🔌 First install
+          \`\`\`bash
+          pip install esptool
+          python -m esptool --chip esp32c3 --port COM3 erase-flash
+          python -m esptool --chip esp32c3 --port COM3 write-flash 0x0 deskbuddy-${TAG}-full.bin
+          \`\`\`
+          Then join the **DeskBuddy-Setup** Wi-Fi from your phone and pick your network. 📱
+
+          ### 📶 Update over Wi-Fi
+          \`\`\`bash
+          curl -u deskbuddy:<ota-password> -F "firmware=@deskbuddy-${TAG}-ota.bin" http://deskbuddy.local/update
+          \`\`\`
+          EOF
+
+      - name: 🚀 Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: DeskBuddy ${{ env.TAG }}
+          body_path: notes.md
+          generate_release_notes: true
+          files: dist/*

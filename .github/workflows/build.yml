@@ -1,0 +1,52 @@
+name: 🔨 Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  firmware:
+    name: 🔧 Firmware
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 📦 Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
+
+      - name: 🧰 Install PlatformIO
+        run: pip install platformio
+
+      - name: 🏗️ Build
+        working-directory: firmware
+        run: pio run -e usb
+
+      - name: 📤 Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ github.sha }}
+          path: firmware/.pio/build/usb/firmware.bin
+
+  agent:
+    name: 🐍 Agent
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 📦 Install deps
+        run: pip install -r agent/requirements.txt
+      - name: ✅ Byte-compile
+        run: python -m py_compile agent/deskbuddy_agent.py tools/screenshot.py tools/fontgen.py
