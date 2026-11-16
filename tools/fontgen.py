@@ -14,7 +14,7 @@ OUT = ROOT / "firmware" / "src" / "fonts"
 INTER = FONTS / "Inter.ttf"
 ICONS = FONTS / "MaterialIcons-Regular.ttf"
 
-LATIN1 = list(range(0x20, 0x7F)) + list(range(0xA0, 0x100))
+LATIN1 = list(range(0x20, 0x7F)) + list(range(0xA0, 0x100)) + [0x2192, 0x2022]  # + → •
 DIGITS = [ord(c) for c in " 0123456789:%-.°"]
 
 # Material Icons we use (name -> codepoint); names become ICON_* macros

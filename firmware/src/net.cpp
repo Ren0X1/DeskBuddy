@@ -115,6 +115,10 @@ static void handleUdp() {
       handleArt(pkt, n);
       continue;
     }
+    if (n > 6 && pkt[0] == 'M' && pkt[1] == 'P') {
+      alertOnMapChunk(pkt, n);
+      continue;
+    }
     pkt[n] = 0;
     JsonDocument d;
     if (deserializeJson(d, (const char*)pkt)) continue;
@@ -133,6 +137,10 @@ static void handleUdp() {
       pc.lastRx = millis();
     } else if (!strcmp(t, "media")) {
       onMedia(d);
+    } else if (!strcmp(t, "radar")) {
+      radarOnJson(d);
+    } else if (!strcmp(t, "alert")) {
+      alertOnJson(d);
     }
   }
 }
@@ -296,15 +304,15 @@ static void weatherTask(void*) {
     }
     char url[256];
     snprintf(url, sizeof url,
-             "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f"
+             // plain HTTP on purpose: TLS needs ~40 KB of heap, which starves OTA uploads
+             "http://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f"
              "&current=temperature_2m,weather_code,is_day"
              "&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto",
              lat, lon);
-    WiFiClientSecure sc;
-    sc.setInsecure();
+    WiFiClient wc;
     HTTPClient http;
     bool ok = false;
-    if (http.begin(sc, url) && http.GET() == 200) {
+    if (http.begin(wc, url) && http.GET() == 200) {
       JsonDocument d;
       if (!deserializeJson(d, http.getString())) {
         weather.temp = d["current"]["temperature_2m"] | 0.0f;

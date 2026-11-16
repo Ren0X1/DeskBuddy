@@ -1,9 +1,10 @@
 #pragma once
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <lvgl.h>
 #include "config.h"
 
-enum Tile { TILE_CLOCK, TILE_MON, TILE_MUSIC, TILE_INFO, TILE_COUNT };
+enum Tile { TILE_CLOCK, TILE_MON, TILE_MUSIC, TILE_RADAR, TILE_INFO, TILE_COUNT };
 
 struct PcStats {
   float cpu = 0, ram = 0, gpu = 0, gpuTemp = 0, vram = 0;
@@ -47,6 +48,7 @@ void hwLoop();
 uint8_t hwUserBrightness();
 void hwSetUserBrightness(uint8_t b, bool save);
 void hwSetTarget(uint8_t b);
+void hwPoke();  // counts as a touch: wakes a dark screen
 
 // net.cpp - Wi-Fi, setup portal, UDP, OTA, weather
 void netInit();
@@ -68,6 +70,18 @@ void uiDebug(const char* cmd);
 void musicBuild(lv_obj_t* tile);
 void musicTick();
 void musicFast();
+
+// ui_radar.cpp - nearby planes + spotlight alerts
+void radarBuild(lv_obj_t* tile);
+void radarOnJson(JsonDocument& d);
+void radarFast(uint32_t dt);
+void radarTick();
+void alertBuild();
+void alertOnJson(JsonDocument& d);
+void alertOnMapChunk(const uint8_t* p, int n);
+void alertTick();
+bool alertActive();
+void alertDebug();
 
 // ui_eye.cpp
 void eyeInit();

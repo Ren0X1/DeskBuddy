@@ -206,7 +206,7 @@ def send_art() -> None:
     chunks = [data[i:i + ART_CHUNK] for i in range(0, len(data), ART_CHUNK)]
     for i, c in enumerate(chunks):
         send_raw(b"AR" + struct.pack("<HBB", aid, i, len(chunks)) + c)
-        time.sleep(0.003)
+        time.sleep(0.03)  # the ESP32 only queues a handful of UDP packets
 
 
 async def read_thumbnail(ref) -> bytes | None:
@@ -380,7 +380,7 @@ def tray_image(connected: bool) -> Image.Image:
     return im
 
 
-def run_tray() -> None:
+def run_tray(radar) -> None:
     import webbrowser
     import pystray
 
@@ -415,6 +415,14 @@ def run_tray() -> None:
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Abrir panel web", open_web, default=True),
         pystray.MenuItem("Ver log", open_log),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("Radar de aviones cercanos", lambda i, it: radar.toggle("radar"),
+                         checked=lambda it: radar.enabled("radar")),
+        pystray.MenuItem("Alertas de vuelos destacados", lambda i, it: radar.toggle("spotlight"),
+                         checked=lambda it: radar.enabled("spotlight")),
+        pystray.MenuItem("Editar configuración", lambda i, it: os.startfile(radar_config_path())),
+        pystray.MenuItem("Recargar configuración", lambda i, it: radar.reload()),
+        pystray.Menu.SEPARATOR,
         pystray.MenuItem("Iniciar con Windows", toggle_autostart, checked=autostart_on),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Salir", quit_app),
@@ -434,12 +442,20 @@ def run_tray() -> None:
     icon.run(setup=lambda i: threading.Thread(target=watch, args=(i,), daemon=True).start())
 
 
+def radar_config_path() -> Path:
+    from radar import CONFIG
+    return CONFIG
+
+
 def main() -> None:
+    from radar import Radar
     log.info("agent starting on %s", HOSTNAME)
     for fn in (gpu_reader, audio_worker, media_thread, receiver, resolve_mdns, sender):
         threading.Thread(target=fn, daemon=True, name=fn.__name__).start()
+    radar = Radar(send, send_raw, log)
+    radar.start()
     try:
-        run_tray()  # blocks until "Salir"
+        run_tray(radar)  # blocks until "Salir"
     except Exception as e:  # no tray available -> keep running headless
         log.warning("tray: %s", e)
         threading.Event().wait()

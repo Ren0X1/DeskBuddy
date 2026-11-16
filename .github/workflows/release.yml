@@ -55,7 +55,7 @@ jobs:
           # app only, for Wi-Fi (OTA) updates
           cp $B/firmware.bin dist/deskbuddy-${TAG}-ota.bin
           # Windows PC agent
-          (cd agent && zip -r ../dist/deskbuddy-agent-${TAG}.zip deskbuddy_agent.py requirements.txt install_autostart.ps1)
+          (cd agent && zip -r ../dist/deskbuddy-agent-${TAG}.zip deskbuddy_agent.py radar.py config.example.json requirements.txt install_autostart.ps1)
           ls -la dist
 
       - name: 📝 Release notes

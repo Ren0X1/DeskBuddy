@@ -1,6 +1,6 @@
 # 🖥️ DeskBuddy
 
-> A tiny round desk companion for your PC 🤖: live hardware stats, a music remote with album art, a clock with weather, and a pair of eyes that keep you company. Everything runs over **Wi-Fi** 🛜, so the only cable is for power.
+> A tiny round desk companion for your PC 🤖: live hardware stats, a music remote with album art, a clock with weather, a ✈️ **plane radar** of the sky above your home, and a pair of eyes that keep you company. Everything runs over **Wi-Fi** 🛜, so the only cable is for power.
 
 [![Build](https://github.com/Ren0X1/DeskBuddy/actions/workflows/build.yml/badge.svg)](https://github.com/Ren0X1/DeskBuddy/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/Ren0X1/DeskBuddy?logo=github)](https://github.com/Ren0X1/DeskBuddy/releases/latest)
@@ -10,6 +10,10 @@
 <p align="center">
   <img src="docs/monitor.png" width="190" alt="PC monitor">
   <img src="docs/music.png" width="190" alt="Music player">
+  <img src="docs/radar.png" width="190" alt="Plane radar">
+  <img src="docs/alert.png" width="190" alt="Spotlight alert">
+</p>
+<p align="center">
   <img src="docs/clock.png" width="190" alt="Clock and weather">
   <img src="docs/eye.png" width="190" alt="Idle eyes">
 </p>
@@ -29,6 +33,30 @@ A tachometer-style CPU gauge with a red zone, plus GPU load, RAM and GPU tempera
 - ⏮️ ⏯️ ⏭️ Media controls and 🔉🔊 volume. Tap the volume to 🔇 mute
 - Works with **any** Windows media source: Spotify, YouTube, Apple Music, VLC and more
 - Jumps to this screen automatically when a song starts
+
+### ✈️ Plane Radar
+An old-school green phosphor radar 📡 of the sky around your home. Blips light up as the sweep passes and fade out slowly, just like the real thing.
+- Shows every aircraft within **15 km** (configurable) with callsign, type, route (**MAD → BCN**), distance, altitude and speed
+- Positions are dead-reckoned between updates, so the blips glide smoothly
+- Tap to cycle through the aircraft
+- Jumps to the radar when a new plane enters your airspace
+
+### 🚨 Spotlight alerts
+When something interesting is flying **anywhere in the world**, DeskBuddy shows it full-screen for a minute 🌍. You get a world map with the route flown (solid), the way to the destination (dashed) and a pulsing plane, all behind the radar sweep:
+- 🆘 **Emergencies**: squawk 7700 (emergency), 7600 (radio failure) and 7500 (hijack). These are the flights that usually top the "most tracked" lists
+- ⭐ **Notable aircraft**: Air Force One, Airbus Beluga, Boeing Dreamlifter, An-124... Add your own callsigns and types
+
+Both modes are toggled from the tray icon and set up in `agent/config.json`:
+
+```json
+{
+  "home": { "lat": 40.4168, "lon": -3.7038 },
+  "radar": { "enabled": true, "radius_km": 15 },
+  "spotlight": { "enabled": true, "show_seconds": 60, "watch_types": ["A337", "BLCF"] }
+}
+```
+
+Data: [adsb.lol](https://adsb.lol) (open ADS-B, ODbL) · [hexdb.io](https://hexdb.io) (routes) · [Natural Earth](https://www.naturalearthdata.com) (map). No API keys. 🔓
 
 ### 🕒 Clock & Weather
 NTP time with a sweeping seconds dial. Current weather, the day's min/max and your city from [Open-Meteo](https://open-meteo.com) 🌦️, no API key needed.
@@ -121,7 +149,7 @@ pio run -e ota -t upload    # 📶 over Wi-Fi
 | `tools/fontgen.py` | 🔤 Turns Inter + Material Icons into LVGL fonts (Latin-1 + icons, no Node needed) |
 | `tools/screenshot.py` | 📸 Dumps the live screen over USB: `python tools/screenshot.py --tile 0 1 2 3` |
 
-Serial console commands: `shot` · `tile N` · `eye` · `sleepy` · `ota N` · `portal` · `wifireset`
+Serial console commands: `shot` · `tile N` · `eye` · `sleepy` · `alert` · `alertmap` · `ota N` · `portal` · `mem` · `fps` · `wifireset`
 
 Tweak night hours, idle timers, timezone or a fixed weather location in [`firmware/include/config.h`](firmware/include/config.h). ⚙️
 

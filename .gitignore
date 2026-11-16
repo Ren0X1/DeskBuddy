@@ -19,3 +19,7 @@ __pycache__/
 
 # misc
 screenshots/
+
+# radar: your home coordinates + downloaded map data
+agent/config.json
+agent/data/

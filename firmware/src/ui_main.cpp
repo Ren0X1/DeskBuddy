@@ -24,7 +24,8 @@ static float shownCpu = 0, shownGpu = 0, shownRam = 0, shownTemp = 0;
 static lv_obj_t *lblIp, *lblWifi, *lblUp, *slider;
 
 // overlays
-static lv_obj_t *otaLayer, *otaArc, *otaPct, *portalLayer;
+static lv_obj_t *otaLayer, *otaArc, *otaPct, *portalLayer, *otaBlank, *otaPrevScr;
+static uint32_t otaLastMs = 0;
 static bool forceEye = false;
 
 // ================================================================= helpers
@@ -100,7 +101,11 @@ static void tickClock() {
     uiSetText(lblTime, b);
     snprintf(b, sizeof b, "%s · %d %s", DAYS[ti.tm_wday], ti.tm_mday, MON[ti.tm_mon]);
     uiSetText(lblDate, b);
-    lv_meter_set_indicator_end_value(clkMeter, clkSec, ti.tm_sec);
+    static int lastSec = -1;
+    if (ti.tm_sec != lastSec) {
+      lastSec = ti.tm_sec;
+      lv_meter_set_indicator_end_value(clkMeter, clkSec, ti.tm_sec);
+    }
   }
   if (weather.valid) {
     uiSetText(lblWxIcon, wxIcon(weather.code, weather.isDay));
@@ -180,10 +185,15 @@ static void fastMonitor() {
   shownGpu += ((on ? pc.gpu : 0) - shownGpu) * 0.2f;
   shownRam += ((on ? pc.ram : 0) - shownRam) * 0.2f;
   shownTemp += ((on ? pc.gpuTemp : 0) - shownTemp) * 0.2f;
-  int v = (int)lroundf(shownCpu);
-  lv_meter_set_indicator_end_value(monMeter, iNorm, min(v, 75));
-  lv_meter_set_indicator_end_value(monMeter, iWarn, v >= 76 ? min(v, 89) : -1);
-  lv_meter_set_indicator_end_value(monMeter, iHot, v >= 90 ? v : -1);
+  // the meter redraws all 51 ticks on every set -> only touch it when a tick changes
+  static int lastV = -1;
+  int v = (int)lroundf(shownCpu) / 2 * 2;
+  if (v != lastV) {
+    lastV = v;
+    lv_meter_set_indicator_end_value(monMeter, iNorm, min(v, 75));
+    lv_meter_set_indicator_end_value(monMeter, iWarn, v >= 76 ? min(v, 89) : -1);
+    lv_meter_set_indicator_end_value(monMeter, iHot, v >= 90 ? v : -1);
+  }
   if (on) {
     setCol(colGpu, pc.gpu, shownGpu, "%d%%");
     setCol(colRam, pc.ram, shownRam, "%d%%");
@@ -284,7 +294,17 @@ static lv_obj_t* overlay() {
   return o;
 }
 
+static void otaWatchdog() {  // a failed upload never reboots: restore the UI
+  if (!lv_obj_has_flag(otaLayer, LV_OBJ_FLAG_HIDDEN) && otaPrevScr && millis() - otaLastMs > 15000) {
+    lv_obj_add_flag(otaLayer, LV_OBJ_FLAG_HIDDEN);
+    lv_scr_load(otaPrevScr);
+    otaPrevScr = NULL;
+  }
+}
+
 static void buildOverlays() {
+  otaBlank = lv_obj_create(NULL);
+  lv_obj_set_style_bg_color(otaBlank, C_BG, 0);
   otaLayer = overlay();
   otaArc = uiArc(otaLayer, 200, 6, C_ACCENT, 270, 360);
   lv_obj_t* icon = uiLabel(otaLayer, &icons_24, C_ACCENT, ICON_UPDATE);
@@ -309,8 +329,14 @@ static void buildOverlays() {
 
 void uiOtaProgress(int pct) {
   static int last = -1;
-  if (pct == last) return;
+  otaLastMs = millis();
+  if (pct == last || (pct - last < 2 && pct < 100 && last >= 0 && pct > last)) return;
   last = pct;
+  if (lv_obj_has_flag(otaLayer, LV_OBJ_FLAG_HIDDEN)) {
+    // park on an empty screen so each progress refresh is cheap and the upload gets the CPU
+    otaPrevScr = lv_scr_act();
+    lv_scr_load(otaBlank);
+  }
   lv_obj_clear_flag(otaLayer, LV_OBJ_FLAG_HIDDEN);
   lv_arc_set_value(otaArc, pct * 10);
   char b[8];
@@ -360,8 +386,13 @@ void uiDebug(const char* cmd) {
     eyeSetSleepy(true);
   } else if (!strncmp(cmd, "ota ", 4)) {
     int p = atoi(cmd + 4);
-    if (p < 0) lv_obj_add_flag(otaLayer, LV_OBJ_FLAG_HIDDEN);
-    else uiOtaProgress(p);
+    if (p >= 0) uiOtaProgress(p);
+    else otaLastMs = 0, otaWatchdog();
+  } else if (!strcmp(cmd, "alert")) {
+    alertDebug();
+  } else if (!strcmp(cmd, "alertmap")) {
+    void alertDebugMap();
+    alertDebugMap();
   } else if (!strcmp(cmd, "portal")) {
     uiPortal(lv_obj_has_flag(portalLayer, LV_OBJ_FLAG_HIDDEN));
   }
@@ -373,8 +404,8 @@ static void policy() {
   bool night = isNight();
   bool idle = on && pc.idle >= IDLE_EYE_SECONDS && !media.playing;
 
-  // idle eye
-  if (!forceEye) {
+  // idle eye (an alert owns the screen while it's up)
+  if (!forceEye && !alertActive()) {
     if (on && pc.idle < IDLE_EYE_SECONDS) eyeClearDismiss();
     if (idle && !eyeActive() && !eyeDismissed()) eyeShow();
     if (eyeActive() && !idle) eyeHide();
@@ -397,8 +428,12 @@ static void policy() {
 }
 
 static void fastTimer(lv_timer_t*) {
+  static uint32_t last = millis();
+  uint32_t now = millis(), dt = now - last;
+  last = now;
   fastMonitor();
   musicFast();
+  radarFast(dt);
   eyeTick();
 }
 
@@ -406,8 +441,11 @@ static void slowTimer(lv_timer_t*) {
   tickClock();
   tickMonitor();
   musicTick();
+  radarTick();
+  alertTick();
   tickInfo();
   policy();
+  otaWatchdog();
 }
 
 void uiInit() {
@@ -426,7 +464,9 @@ void uiInit() {
   buildClock(tiles[TILE_CLOCK]);
   buildMonitor(tiles[TILE_MON]);
   musicBuild(tiles[TILE_MUSIC]);
+  radarBuild(tiles[TILE_RADAR]);
   buildInfo(tiles[TILE_INFO]);
+  alertBuild();
 
   lv_obj_t* dotRow = uiRow(scr, 4);
   lv_obj_set_flex_align(dotRow, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);

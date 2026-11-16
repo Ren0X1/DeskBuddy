@@ -84,6 +84,7 @@ static float curBright = 0;
 uint32_t lastTouchMs() { return lastTouch; }
 uint8_t hwUserBrightness() { return userBright; }
 void hwSetTarget(uint8_t b) { targetBright = b; }
+void hwPoke() { lastTouch = millis(); }
 
 void hwSetUserBrightness(uint8_t b, bool save) {
   userBright = b;
@@ -161,6 +162,20 @@ static void handleSerial() {
       lv_refr_now(NULL);
       capturing = false;
       Serial.println("END");
+    } else if (!strcmp(line, "mem")) {
+      Serial.printf("heap free %u, min %u, largest %u, up %lus, reset reason %d, stack left %u\n",
+                    ESP.getFreeHeap(), ESP.getMinFreeHeap(), ESP.getMaxAllocHeap(), millis() / 1000,
+                    (int)esp_reset_reason(), uxTaskGetStackHighWaterMark(NULL));
+    } else if (!strcmp(line, "fps")) {
+      uint32_t t0 = millis(), frames = 0;
+      while (millis() - t0 < 2000) {
+        uint32_t f0 = millis();
+        lv_timer_handler();
+        frames++;
+        delay(2);
+        (void)f0;
+      }
+      Serial.printf("loop %u it/2s\n", frames);
     } else if (!strcmp(line, "wifireset")) {
       netResetWifi();
     } else if (line[0]) {

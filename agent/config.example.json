@@ -1,0 +1,21 @@
+{
+  "home": {
+    "lat": 40.4168,
+    "lon": -3.7038
+  },
+  "radar": {
+    "enabled": true,
+    "radius_km": 15,
+    "interval_s": 5,
+    "auto_show": true
+  },
+  "spotlight": {
+    "enabled": true,
+    "interval_s": 120,
+    "show_seconds": 60,
+    "repeat_minutes": 120,
+    "squawks": ["7700", "7600", "7500"],
+    "watch_callsigns": ["AF1", "AF2", "EXEC1F", "SAM"],
+    "watch_types": ["A337", "A3ST", "BLCF", "A124", "B52", "U2"]
+  }
+}

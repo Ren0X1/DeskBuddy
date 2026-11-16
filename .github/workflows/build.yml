@@ -49,4 +49,4 @@ jobs:
       - name: 📦 Install deps
         run: pip install -r agent/requirements.txt
       - name: ✅ Byte-compile
-        run: python -m py_compile agent/deskbuddy_agent.py tools/screenshot.py tools/fontgen.py
+        run: python -m py_compile agent/deskbuddy_agent.py agent/radar.py tools/screenshot.py tools/fontgen.py
