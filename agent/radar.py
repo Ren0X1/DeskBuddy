@@ -28,7 +28,8 @@ ADSB = "https://api.adsb.lol/v2"
 CHUNK = 1280  # must match ART_CHUNK in firmware config.h
 
 DEFAULT_CONFIG = {
-    "home": {"lat": 40.4168, "lon": -3.7038},  # placeholder: set yours in config.json
+    # placeholder: set yours in config.json (also used for the weather on the clock)
+    "home": {"lat": 40.4168, "lon": -3.7038, "city": ""},
     "radar": {"enabled": True, "radius_km": 15, "interval_s": 5, "auto_show": True},
     "spotlight": {
         "enabled": True,
@@ -84,12 +85,31 @@ def thousands(v: int) -> str:
     return f"{v:,}".replace(",", ".")
 
 
+def clean_model(name: str) -> str:
+    """'Boeing 737NG 8AS/W' -> 'Boeing 737-800', 'Airbus A320 214' -> 'Airbus A320'."""
+    import re
+    name = re.sub(r"/W\b", "", name or "").strip()
+    name = re.sub(r"\b(7[0-9]7)NG (\d)[A-Z0-9]{2}\b", r"\1-\g<2>00", name)   # Boeing customer codes
+    name = re.sub(r"\b(7[0-9]7) (\d)[A-Z0-9]{2}\b", r"\1-\g<2>00", name)
+    name = re.sub(r"\b(A3[0-9]{2}(?:neo|NEO)?)[ -]\d{3}[A-Z]?\b", r"\1", name)  # Airbus engine/series
+    return re.sub(r"\s+", " ", name).strip()
+
+
+def callsign_of(a: dict) -> str:
+    """Flight callsign, or registration/hex when the transponder sends junk like '00000000'."""
+    cs = (a.get("flight") or "").strip()
+    if not cs or set(cs) <= {"0", "?"}:
+        cs = (a.get("r") or a.get("hex") or "?").strip().upper()
+    return cs
+
+
 # ------------------------------------------------------------------ routes (hexdb.io)
 class Routes:
     def __init__(self, log):
         self.log = log
         self.routes: dict[str, tuple] = {}
         self.airports: dict[str, dict | None] = {}
+        self.models: dict[str, str] = {}
 
     def airport(self, icao: str) -> dict | None:
         if icao not in self.airports:
@@ -100,6 +120,27 @@ class Routes:
             except Exception:
                 self.airports[icao] = None
         return self.airports[icao]
+
+    def model(self, hexid: str, budget: list | None = None) -> str:
+        """Full aircraft model ('Boeing 737 MAX 8') from the ICAO hex. Cached forever."""
+        h = hexid.strip().upper()
+        if h in self.models:
+            return self.models[h]
+        if budget is not None:
+            if budget[0] <= 0:
+                return ""
+            budget[0] -= 1
+        name = ""
+        try:
+            a = http_json(f"https://hexdb.io/api/v1/aircraft/{h}", 10)
+            name = (a.get("Type") or "").strip()
+            maker = (a.get("Manufacturer") or "").strip().title()
+            if maker and name and not name.lower().startswith(maker.split()[0].lower()):
+                name = f"{maker.split()[0]} {name}"
+        except Exception:
+            pass
+        self.models[h] = name = clean_model(name)
+        return name
 
     def lookup(self, callsign: str, budget: list | None = None):
         """-> (origin, destination) airport dicts, or (None, None). Cached for 6 h."""
@@ -251,6 +292,10 @@ class Radar:
         self.alert_id = random.randint(1, 60000)  # survives agent restarts without id clashes
         self.lock = threading.Lock()
 
+    def home(self) -> dict:
+        h = self.cfg["home"]
+        return {"lat": h["lat"], "lon": h["lon"], "city": h.get("city", "")}
+
     # -- config helpers for the tray menu
     def enabled(self, mode: str) -> bool:
         return bool(self.cfg[mode]["enabled"])
@@ -302,16 +347,18 @@ class Radar:
             if dist <= radius:
                 planes.append((dist, x, y, a))
         planes.sort(key=lambda p: p[0])
-        budget = [3]
+        budget, mbudget = [3], [3]
         out = []
         for dist, x, y, a in planes[:10]:
-            cs = (a.get("flight") or a.get("r") or a.get("hex", "?")).strip()
-            o, dd = self.routes.lookup(cs, budget) if a.get("flight") else (None, None)
+            cs = callsign_of(a)
+            o, dd = self.routes.lookup(cs, budget) if cs == (a.get("flight") or "").strip() else (None, None)
+            model = (clean_model(a.get("desc") or "")
+                     or self.routes.model(a.get("hex", ""), mbudget) or a.get("t") or "")
             alt = a.get("alt_baro") if isinstance(a.get("alt_baro"), (int, float)) else a.get("alt_geom", 0)
             out.append({"c": cs[:9], "ty": (a.get("t") or "")[:7], "x": round(x, 2), "y": round(y, 2),
                         "al": int((alt or 0) * 0.3048), "s": int((a.get("gs") or 0) * 1.852),
                         "h": int(a.get("track") or a.get("true_heading") or 0),
-                        "rt": self.routes.text(o, dd)[:23]})
+                        "rt": self.routes.text(o, dd)[:23], "md": model[:31]})
         return {"t": "radar", "on": 1, "r": radius, "auto": bool(rc.get("auto_show", True)), "ac": out}
 
     # -- spotlight
@@ -371,8 +418,8 @@ class Radar:
             return
 
     def show(self, label: str, emergency: bool, a: dict, secs: int) -> None:
-        cs = (a.get("flight") or a.get("r") or a["hex"]).strip()
-        o, d = self.routes.lookup(cs) if a.get("flight") else (None, None)
+        cs = callsign_of(a)
+        o, d = self.routes.lookup(cs) if cs == (a.get("flight") or "").strip() else (None, None)
         trail = self.trails.get(a["hex"], [])[:-1]
         img, p, marks = self.map.render((a["lat"], a["lon"]), a.get("track"), o, d, trail)
         self.alert_id = self.alert_id % 65000 + 1
@@ -384,7 +431,7 @@ class Radar:
                 self.send_raw(b"MP" + bytes((aid & 255, aid >> 8, i, len(chunks))) + c)
                 time.sleep(0.03)
         alt = a.get("alt_baro") if isinstance(a.get("alt_baro"), (int, float)) else 0
-        model = a.get("desc") or a.get("t") or ""
+        model = clean_model(a.get("desc") or "") or self.routes.model(a["hex"]) or a.get("t") or ""
         if a.get("r"):
             model = f"{model} · {a['r']}" if model else a["r"]
         msg = {"t": "alert", "id": aid, "lbl": label, "c": cs[:11], "m": model[:39],

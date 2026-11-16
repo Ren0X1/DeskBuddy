@@ -350,6 +350,14 @@ def resolve_mdns() -> None:
         time.sleep(10)
 
 
+radar_obj = None
+
+
+def home_ref() -> dict | None:
+    """Home location from config.json -> DeskBuddy uses it for the weather."""
+    return radar_obj.home() if radar_obj else None
+
+
 def sender() -> None:
     psutil.cpu_percent(None)
     tick = 0
@@ -361,22 +369,28 @@ def sender() -> None:
             send_art()
         send({"t": "media", **media, **audio})
         if tick % 2 == 0:
-            send({"t": "stats", "host": HOSTNAME, "idle": idle_seconds(),
+            send({"t": "stats", "host": HOSTNAME, "idle": idle_seconds(), "home": home_ref(),
                   "cpu": round(psutil.cpu_percent(None), 1),
                   "ram": round(psutil.virtual_memory().percent, 1), **gpu})
 
 
 # ------------------------------------------------------------------ tray icon
 def tray_image(connected: bool) -> Image.Image:
-    """A little round DeskBuddy: dark face, accent ring, two eyes."""
+    """Mini radar scope in phosphor green: rings, a sweep and a blip. Grey when offline."""
     from PIL import ImageDraw
     s = 64
     im = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
-    ring = (90, 200, 250) if connected else (110, 116, 128)
-    d.ellipse((2, 2, s - 3, s - 3), fill=(12, 14, 18), outline=ring, width=5)
-    for x in (20, 36):
-        d.rounded_rectangle((x, 21, x + 9, 41), radius=4, fill=ring)
+    g = (57, 255, 136) if connected else (96, 110, 102)
+    dim = (22, 120, 68) if connected else (60, 66, 62)
+    d.ellipse((1, 1, s - 2, s - 2), fill=(2, 14, 8), outline=g, width=4)
+    d.ellipse((17, 17, s - 18, s - 18), outline=dim, width=2)
+    d.line((32, 6, 32, 58), fill=dim, width=1)
+    d.line((6, 32, 58, 32), fill=dim, width=1)
+    d.pieslice((5, 5, s - 6, s - 6), 300, 345, fill=dim)   # sweep wedge
+    d.line((32, 32, 52, 13), fill=g, width=4)              # sweep line
+    if connected:
+        d.ellipse((38, 40, 46, 48), fill=g)                # blip
     return im
 
 
@@ -448,11 +462,12 @@ def radar_config_path() -> Path:
 
 
 def main() -> None:
+    global radar_obj
     from radar import Radar
     log.info("agent starting on %s", HOSTNAME)
+    radar = radar_obj = Radar(send, send_raw, log)
     for fn in (gpu_reader, audio_worker, media_thread, receiver, resolve_mdns, sender):
         threading.Thread(target=fn, daemon=True, name=fn.__name__).start()
-    radar = Radar(send, send_raw, log)
     radar.start()
     try:
         run_tray(radar)  # blocks until "Salir"

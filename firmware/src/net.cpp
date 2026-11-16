@@ -43,6 +43,23 @@ static DNSServer dns;
 static Preferences wprefs;
 static String ssid, pass;
 static bool portalOn = false, everConnected = false, serverUp = false;
+// home location pushed by the PC agent (config.json) - beats IP geolocation
+static volatile float homeLat = NAN, homeLon = NAN;
+static volatile bool homeChanged = false;
+static char homeCity[32] = "";
+
+static void onHome(JsonObject h) {
+  if (h.isNull() || !h["lat"].is<float>()) return;
+  float lat = h["lat"], lon = h["lon"];
+  if (!isnan(homeLat) && fabsf(lat - homeLat) < 0.001f && fabsf(lon - homeLon) < 0.001f) return;
+  homeLat = lat;
+  homeLon = lon;
+  strlcpy(homeCity, h["city"] | "", sizeof homeCity);
+  wprefs.putFloat("hlat", lat);
+  wprefs.putFloat("hlon", lon);
+  wprefs.putString("hcity", homeCity);
+  homeChanged = true;
+}
 
 bool pcOnline() { return pc.lastRx && millis() - pc.lastRx < 5000; }
 bool pcAsleep() {
@@ -135,6 +152,7 @@ static void handleUdp() {
       pc.idle = d["idle"] | 0;
       strlcpy(pc.host, d["host"] | "PC", sizeof pc.host);
       pc.lastRx = millis();
+      onHome(d["home"]);
     } else if (!strcmp(t, "media")) {
       onMedia(d);
     } else if (!strcmp(t, "radar")) {
@@ -285,7 +303,13 @@ static void weatherTask(void*) {
       vTaskDelay(pdMS_TO_TICKS(3000));
       continue;
     }
-    if (isnan(lat)) {  // rough location from the public IP
+    if (!isnan(homeLat)) {  // configured home wins over everything
+      lat = homeLat;
+      lon = homeLon;
+      homeChanged = false;
+      if (homeCity[0]) strlcpy(weather.city, homeCity, sizeof weather.city);
+    }
+    if (isnan(lat)) {  // last resort: rough location from the public IP
       WiFiClient c;
       HTTPClient http;
       if (http.begin(c, "http://ip-api.com/json/?fields=status,lat,lon,city") && http.GET() == 200) {
@@ -324,7 +348,9 @@ static void weatherTask(void*) {
       }
     }
     http.end();
-    vTaskDelay(pdMS_TO_TICKS(ok ? 15 * 60000 : 60000));
+    // sleep until the next refresh, or until the PC tells us a new home
+    uint32_t until = millis() + (ok ? 15 * 60000 : 60000);
+    while ((int32_t)(until - millis()) > 0 && !homeChanged) vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
 
@@ -333,6 +359,11 @@ void netInit() {
   wprefs.begin("wifi", false);
   ssid = wprefs.getString("ssid", WIFI_SSID);
   pass = wprefs.getString("pass", WIFI_PASS);
+  if (wprefs.isKey("hlat")) {  // remembered home, so the weather is right even with the PC off
+    homeLat = wprefs.getFloat("hlat");
+    homeLon = wprefs.getFloat("hlon");
+    strlcpy(homeCity, wprefs.getString("hcity", "").c_str(), sizeof homeCity);
+  }
 
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(HOSTNAME);

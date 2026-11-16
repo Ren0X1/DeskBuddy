@@ -1,7 +1,8 @@
 {
   "home": {
     "lat": 40.4168,
-    "lon": -3.7038
+    "lon": -3.7038,
+    "city": "Madrid"
   },
   "radar": {
     "enabled": true,

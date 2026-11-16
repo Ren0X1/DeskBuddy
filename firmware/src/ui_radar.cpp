@@ -17,7 +17,7 @@
 
 // ================================================================= data
 struct Plane {
-  char cs[10], type[8], route[24];
+  char cs[10], type[8], route[24], model[32];
   float x, y;  // km east / north of home
   int alt, spd, hdg;
   float glow;
@@ -96,7 +96,7 @@ static void sweepSet(Sweep& s) {
 // ================================================================= radar tile
 static lv_obj_t *blip[MAX_PLANES], *tail[MAX_PLANES], *tag[MAX_PLANES], *selRing;
 static lv_point_t tailPts[MAX_PLANES][2];
-static lv_obj_t *pnl1, *pnl2, *pnl3, *ringLbl[3];
+static lv_obj_t *pnl1, *pnl2, *pnl3, *pnl4, *ringLbl[3];
 
 static lv_obj_t* circle(lv_obj_t* p, int d, lv_color_t border, int bw, lv_color_t fill, lv_opa_t fillOpa) {
   lv_obj_t* c = uiBox(p);
@@ -126,12 +126,12 @@ static void tapCb(lv_event_t*) {
   }
 }
 
-static lv_obj_t* panel(lv_obj_t* p, int y) {
+static lv_obj_t* panel(lv_obj_t* p, int y, int h = 56) {
   lv_obj_t* b = uiBox(p);
-  lv_obj_set_size(b, 160, 56);
+  lv_obj_set_size(b, 164, h);
   lv_obj_set_style_radius(b, 12, 0);
   lv_obj_set_style_bg_color(b, C_BG, 0);
-  lv_obj_set_style_bg_opa(b, LV_OPA_80, 0);
+  lv_obj_set_style_bg_opa(b, LV_OPA_60, 0);
   lv_obj_set_style_border_width(b, 1, 0);
   lv_obj_set_style_border_color(b, G_FAINT, 0);
   lv_obj_align(b, LV_ALIGN_CENTER, 0, y);
@@ -164,6 +164,13 @@ void radarBuild(lv_obj_t* t) {
   lv_obj_t* home = circle(t, 6, G_BRIGHT, 0, G_BRIGHT, LV_OPA_COVER);
   lv_obj_center(home);
 
+  // callsign / model / route + distance / altitude + speed
+  lv_obj_t* b = panel(t, 60, 74);
+  pnl1 = panelLine(b, &font_body, G_BRIGHT, 3);
+  pnl4 = panelLine(b, &font_small, G_MID, 22);
+  pnl2 = panelLine(b, &font_small, G_MID, 38);
+  pnl3 = panelLine(b, &font_small, G_DIM, 54);
+
   for (int i = 0; i < MAX_PLANES; i++) {
     tail[i] = lv_line_create(t);
     lv_obj_remove_style_all(tail[i]);
@@ -176,10 +183,7 @@ void radarBuild(lv_obj_t* t) {
   selRing = circle(t, 18, G_BRIGHT, 1, C_BG, LV_OPA_TRANSP);
   lv_obj_add_flag(selRing, LV_OBJ_FLAG_HIDDEN);
 
-  lv_obj_t* b = panel(t, 70);
-  pnl1 = panelLine(b, &font_body, G_BRIGHT, 3);
-  pnl2 = panelLine(b, &font_small, G_MID, 22);
-  pnl3 = panelLine(b, &font_small, G_DIM, 38);
+
 
   lv_obj_add_event_cb(t, tapCb, LV_EVENT_SHORT_CLICKED, NULL);
 }
@@ -211,6 +215,7 @@ void radarOnJson(JsonDocument& d) {
     strlcpy(p.cs, cs, sizeof p.cs);
     strlcpy(p.type, a["ty"] | "", sizeof p.type);
     strlcpy(p.route, a["rt"] | "", sizeof p.route);
+    strlcpy(p.model, a["md"] | "", sizeof p.model);
     p.x = a["x"] | 0.0f;
     p.y = a["y"] | 0.0f;
     p.alt = a["al"] | 0;
@@ -299,6 +304,7 @@ void radarTick() {
       uiSetText(pnl2, "Actívalo en el agente");
     }
     uiSetText(pnl3, "");
+    uiSetText(pnl4, "");
     if (!pcOnline() || !fresh) nPlanes = 0;
     return;
   }
@@ -307,11 +313,13 @@ void radarTick() {
     snprintf(b, sizeof b, "Radio %d km", (int)lroundf(rangeKm));
     uiSetText(pnl2, b);
     uiSetText(pnl3, "");
+    uiSetText(pnl4, "");
     return;
   }
   Plane& p = planes[selected];
   snprintf(b, sizeof b, "%s  %s", p.cs, p.type);
   uiSetText(pnl1, b);
+  uiSetText(pnl4, p.model[0] ? p.model : p.type);
   float dist = sqrtf(p.x * p.x + p.y * p.y);
   if (p.route[0]) snprintf(b, sizeof b, "%s · %.1f km", p.route, dist);
   else snprintf(b, sizeof b, "%.1f km de casa", dist);
@@ -366,10 +374,12 @@ void alertBuild() {
   alArc = uiArc(alScr, 236, 3, C_WARN, 270, 360);
   lv_obj_set_style_arc_color(alArc, C_BG, LV_PART_MAIN);
 
+  // keep the caption well inside the countdown ring (the circle narrows fast up there)
   alCap = uiCaption(alScr, "");
-  lv_obj_align(alCap, LV_ALIGN_CENTER, 0, -92);
+  lv_obj_set_style_text_letter_space(alCap, 1, 0);
+  lv_obj_align(alCap, LV_ALIGN_CENTER, 0, -84);
   alCs = uiLabel(alScr, &font_value, C_TXT, "");
-  lv_obj_align(alCs, LV_ALIGN_CENTER, 0, -72);
+  lv_obj_align(alCs, LV_ALIGN_CENTER, 0, -64);
   lv_obj_set_style_bg_color(alCs, C_BG, 0);
   lv_obj_set_style_bg_opa(alCs, LV_OPA_60, 0);
   lv_obj_set_style_pad_hor(alCs, 6, 0);

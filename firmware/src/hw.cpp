@@ -176,6 +176,13 @@ static void handleSerial() {
         (void)f0;
       }
       Serial.printf("loop %u it/2s\n", frames);
+    } else if (!strcmp(line, "i2cscan")) {  // shares the touch bus (port 0, SDA 4 / SCL 5)
+      Serial.print("i2c:");
+      for (int a = 1; a < 127; a++)
+        if (lgfx::i2c::readRegister8(0, a, 0, 100000).has_value()) Serial.printf(" 0x%02X", a);
+      auto lvl = lgfx::i2c::readRegister8(0, 0x75, 0x78, 100000);  // IP5306_I2C battery level
+      Serial.printf("\nip5306 0x78: %s %02X\n", lvl.has_value() ? "ok" : "no",
+                    lvl.has_value() ? lvl.value() : 0);
     } else if (!strcmp(line, "wifireset")) {
       netResetWifi();
     } else if (line[0]) {

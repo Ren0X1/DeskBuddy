@@ -30,9 +30,15 @@ def grab(s: serial.Serial) -> Image.Image:
             break
         if not line.startswith(b"RECT"):
             continue
-        x0, y0, w, h = map(int, line.split()[1:])
+        try:
+            x0, y0, w, h = map(int, line.split()[1:5])
+        except ValueError:
+            continue
         raw = s.read(w * h * 2)
+        raw += bytes(w * h * 2 - len(raw))  # tolerate a short read
         for i in range(w * h):
+            if not (0 <= x0 + i % w < 240 and 0 <= y0 + i // w < 240):
+                continue
             v = raw[2 * i] | raw[2 * i + 1] << 8  # little-endian RGB565
             r, g, b = (v >> 11) & 0x1F, (v >> 5) & 0x3F, v & 0x1F
             px[x0 + i % w, y0 + i // w] = (r << 3 | r >> 2, g << 2 | g >> 4, b << 3 | b >> 2)
