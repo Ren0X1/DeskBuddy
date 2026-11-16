@@ -84,6 +84,7 @@ static float curBright = 0;
 uint32_t lastTouchMs() { return lastTouch; }
 uint8_t hwUserBrightness() { return userBright; }
 void hwSetTarget(uint8_t b) { targetBright = b; }
+uint8_t hwTarget() { return targetBright; }
 void hwPoke() { lastTouch = millis(); }
 
 void hwSetUserBrightness(uint8_t b, bool save) {

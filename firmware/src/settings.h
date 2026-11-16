@@ -20,6 +20,8 @@ struct Settings {
   uint8_t nightStart = 23, nightEnd = 8, nightMax = 35;
   uint16_t idleEyeSec = 120, sleepySec = 900;
   bool eyesOn = true;
+  // appended fields keep older saved blobs loadable (prefix-compatible)
+  uint16_t pcOffSec = 120;  // no data from the PC for this long -> backlight off
 };
 
 extern Settings cfg;

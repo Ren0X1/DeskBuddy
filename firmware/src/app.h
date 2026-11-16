@@ -49,6 +49,7 @@ void hwLoop();
 uint8_t hwUserBrightness();
 void hwSetUserBrightness(uint8_t b, bool save);
 void hwSetTarget(uint8_t b);
+uint8_t hwTarget();
 void hwPoke();  // counts as a touch: wakes a dark screen
 
 // net.cpp - Wi-Fi, setup portal, UDP, OTA, weather

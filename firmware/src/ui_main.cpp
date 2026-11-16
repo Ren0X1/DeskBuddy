@@ -389,7 +389,7 @@ static void policy() {
   uint8_t b = hwUserBrightness();
   bool touched = millis() - lastTouchMs() < WAKE_ON_TOUCH_MS;
   if (night) b = min<uint8_t>(b, cfg.nightMax);
-  if (asleep && !touched) b = night ? 0 : min<uint8_t>(b, PC_OFF_BRIGHTNESS);
+  if (asleep && !touched) b = 0;  // PC gone -> screen off; data or a touch brings it back
   if (eyeActive() && night && !touched) b = min<uint8_t>(b, 12);
   hwSetTarget(b);
 }

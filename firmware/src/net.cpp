@@ -72,8 +72,9 @@ static void applySettings(JsonVariantConst d) {
 }
 
 bool pcOnline() { return pc.lastRx && millis() - pc.lastRx < 5000; }
-bool pcAsleep() {
-  return millis() > 60000 && (!pc.lastRx || millis() - pc.lastRx > 60000);
+bool pcAsleep() {  // no data from the PC app for cfg.pcOffSec (default 2 min)
+  uint32_t lim = cfg.pcOffSec * 1000UL;
+  return millis() > lim && (!pc.lastRx || millis() - pc.lastRx > lim);
 }
 const char* netSsid() { return ssid.c_str(); }
 
@@ -294,6 +295,7 @@ static void apiStatus() {
   snprintf(up, sizeof up, "%luh %02lum", m / 60, m % 60);
   d["up"] = up;
   d["heap"] = ESP.getFreeHeap();
+  d["backlight"] = hwTarget();
   String out;
   serializeJson(d, out);
   server.send(200, "application/json", out);

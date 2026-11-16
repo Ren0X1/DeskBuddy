@@ -6,8 +6,15 @@ static Preferences p;
 
 void settingsLoad() {
   p.begin("cfg", true);
-  if (p.isKey("blob") && p.getBytesLength("blob") == sizeof(Settings)) p.getBytes("blob", &cfg, sizeof cfg);
+  size_t n = p.isKey("blob") ? p.getBytesLength("blob") : 0;
+  if (n && n <= sizeof(Settings)) p.getBytes("blob", &cfg, n);  // older firmware saved a shorter prefix
   p.end();
+  // fields added later may have landed in the old blob's padding: sanitise
+  const Settings def;
+  if (cfg.pcOffSec < 30 || cfg.pcOffSec > 3600) cfg.pcOffSec = def.pcOffSec;
+  if (cfg.idleEyeSec < 30) cfg.idleEyeSec = def.idleEyeSec;
+  if (cfg.sleepySec < 60) cfg.sleepySec = def.sleepySec;
+  if (cfg.radiusKm < 2) cfg.radiusKm = def.radiusKm;
   // migrate the home pushed by older agents (stored by net.cpp)
   if (!cfg.hasHome) {
     Preferences w;
@@ -57,6 +64,7 @@ void settingsToJson(JsonDocument& d) {
   sc["idle_eye_s"] = cfg.idleEyeSec;
   sc["sleepy_s"] = cfg.sleepySec;
   sc["eyes"] = cfg.eyesOn;
+  sc["pc_off_s"] = cfg.pcOffSec;
 }
 
 template <typename T>
@@ -118,5 +126,6 @@ bool settingsFromJson(JsonVariantConst d) {
   ch |= upd<uint16_t>(cfg.idleEyeSec, sc["idle_eye_s"], 30, 3600);
   ch |= upd<uint16_t>(cfg.sleepySec, sc["sleepy_s"], 60, 7200);
   ch |= updB(cfg.eyesOn, sc["eyes"]);
+  ch |= upd<uint16_t>(cfg.pcOffSec, sc["pc_off_s"], 30, 3600);
   return ch;
 }

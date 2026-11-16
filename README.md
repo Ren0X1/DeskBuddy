@@ -79,7 +79,7 @@ Open **http://deskbuddy.local** for a HUD-styled control panel:
 DeskBuddy keeps the settings and syncs them to the PC app on its own.
 
 ### 🌙 Night mode & auto-sleep · 📶 OTA updates · 📱 Wi-Fi setup portal
-Brightness drops at night, and when the PC sleeps DeskBuddy parks on the clock (the screen goes off at night). After the first USB flash, every update goes over Wi-Fi. On first boot a **DeskBuddy-Setup** hotspot lets you pick your network from your phone.
+Brightness drops at night. If the PC app sends nothing for **2 minutes** (PC asleep, off or app closed), DeskBuddy parks on the clock and **switches the screen off**, then turns it back on by itself as soon as data arrives again (a touch also wakes it for 20 s). The timeout is set in the web panel. After the first USB flash, every update goes over Wi-Fi. On first boot a **DeskBuddy-Setup** hotspot lets you pick your network from your phone.
 
 ## 🧩 How it works
 
