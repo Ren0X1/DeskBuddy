@@ -74,12 +74,35 @@ When something interesting is flying **anywhere in the world**, DeskBuddy takes 
 
 Each aircraft is shown once and then rests for 2 hours. You can edit the watch list, the duration and the cooldown in the web panel.
 
-### 👀 Robot eyes: 84 animations
+### 👀 Robot eyes: 85 animations
 <img src="docs/gif/eyes.gif" width="200" align="right" alt="Robot eyes">
 
-Leave the PC alone and DeskBuddy comes alive 🤖 with **84 animations** and 40 effects. Blinks, glances, winks, moods (happy, angry, sad, suspicious, sleepy…), hearts, stars, dizzy spirals, tears, a radar sweep, target lock, matrix rain, a countdown, sonar and hypnosis. Tap for something happy 😊, long-press to dismiss. At night it dozes off 😴, and it notices when a plane flies over.
+Leave the PC alone and DeskBuddy comes alive 🤖 with **85 animations** and 40 effects. Blinks, glances, winks, moods (happy, angry, sad, suspicious, sleepy…), hearts, stars, dizzy spirals, tears, a radar sweep, target lock, matrix rain, a countdown, sonar and hypnosis. Tap for something happy 😊, long-press to dismiss. At night it dozes off 😴, and it notices when a plane flies over.
 
 All animations are defined once in [`tools/eyes.py`](tools/eyes.py), which generates the firmware table, so the web preview and the device always match.
+
+<br clear="right">
+
+#### 🎭 Reactions
+Everything DeskBuddy does on its own starts with a short reaction, so you always see *why* the screen changed:
+
+| When | Reaction | Then |
+|---|---|---|
+| ⚡ Power on | Boot (SYS BOOT → READY) → wake up | Clock |
+| 🔌 PC app connects | Surprise → wave → happy | Your screen |
+| 💔 PC app goes away | Sad, a tear now and then | Waits for the PC |
+| 🌑 2 min without the PC | Yawn → CRT switch-off | Screen off |
+| 🔁 PC comes back | Boot → wave | Your screen |
+| ✈️ A plane enters the radar | Follows it with its eyes → target lock | Radar |
+| 🌤️ The sky is clear again | Looks around (NO TGT) → blink | Back where you were |
+| 🚨 Emergency | Startled → amber warning | Red alert map |
+| ⭐ Notable aircraft | Curious → hawk eye | Amber alert map |
+| 🎵 Music starts | Note → bobbing to the beat | Music |
+| 🔇 1 min of silence | Bored | Back where you were |
+| 🌙 Night | Drowsy → yawn → asleep | Sleeps |
+
+#### 🧭 Who gets the screen
+Alert ▸ radar ▸ eyes ▸ music ▸ **your screen**. Radar and music take over on their own and hand the screen back to whatever you picked. If you swipe away from the music it stays away until 3 minutes of silence. The eyes never cover the radar or an alert.
 
 <br clear="right">
 

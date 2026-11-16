@@ -101,7 +101,10 @@ void eyeClearDismiss();
 void eyeSetSleepy(bool s);
 void eyePlay(int idx);
 void eyeCameo();
-void eyeCameoSeq(const char* const* names, int n);
+uint32_t eyeCameoSeq(const char* const* names, int n);
+uint32_t eyeTransition(const char* const* names, int n);
+bool eyeIsTransition();
+void uiPolicyState(int* base, int* autoT, bool* mSess, bool* mSupp, bool* rSess, bool* rSupp);
 void eyeSad();
 bool eyeIsSad();
 bool eyeIsCameo();          // debug / triggers

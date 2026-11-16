@@ -71,7 +71,7 @@ static void applySettings(JsonVariantConst d) {
   }
 }
 
-bool pcOnline() { return pc.lastRx && millis() - pc.lastRx < 5000; }
+bool pcOnline() { return pc.lastRx && millis() - pc.lastRx < 15000; }  // rides out Wi-Fi hiccups
 bool pcAsleep() {  // no data from the PC app for cfg.pcOffSec (default 2 min)
   uint32_t lim = cfg.pcOffSec * 1000UL;
   return millis() > lim && (!pc.lastRx || millis() - pc.lastRx > lim);
@@ -299,6 +299,15 @@ static void apiStatus() {
   d["tile"] = uiTile();
   d["eyes"] = eyeActive();
   d["sad"] = eyeIsSad();
+  d["tr"] = eyeIsTransition();
+  d["cameo"] = eyeIsCameo();
+  {
+    int b, at;
+    bool ms, mx, rs, rx;
+    uiPolicyState(&b, &at, &ms, &mx, &rs, &rx);
+    JsonObject m = d["mgr"].to<JsonObject>();
+    m["base"] = b, m["auto"] = at, m["mus"] = ms, m["musNo"] = mx, m["rad"] = rs, m["radNo"] = rx;
+  }
   d["alert"] = alertActive();
   String out;
   serializeJson(d, out);

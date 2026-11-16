@@ -21,8 +21,9 @@ struct EyeS {
 static const EyeS BASE_S = {{-42, 0, 54, 74, 20, 0, 0, 0, 1}, {42, 0, 54, 74, 20, 0, 0, 0, 1}, 0, 0, 0};
 static const EyeS SLEEP_S = {{-42, 0, 54, 6, 20, 0, 0, 0, 1}, {42, 0, 54, 6, 20, 0, 0, 0, 1}, 0, 14, 0};
 
-static lv_obj_t *scr, *view, *prevScr;
-static bool active = false, sleepy = false, dismissed = false, cameo = false, sad = false;
+static lv_obj_t *scr, *view;  // scr = full-screen layer on lv_layer_top(), not a separate screen
+static bool active = false, sleepy = false, dismissed = false, cameo = false, sad = false, transition = false,
+            sleepPending = false;
 static int queue[4], qn = 0, idxSad = -1, idxCry = -1;
 static int cur = -1;
 static uint32_t t0 = 0, restUntil = 0, animTotal[EYE_ANIM_COUNT];
@@ -421,7 +422,7 @@ void eyeInit() {
     if (a >= 0 && nCalm < 12) calm[nCalm++] = a;
   }
   // context-only animations never play at random
-  static const char* ctx[] = {"Dormir", "Despertar", "Avión a la vista", "Nueva canción", "Apagado", "Arranque", "K.O."};
+  static const char* ctx[] = {"Dormir", "Despertar", "Avión a la vista", "Nueva canción", "Apagado", "Apagar", "Arranque", "K.O."};
   for (const char* n : ctx) {
     int a = findAnim(n);
     if (a >= 0) excluded[a] = true;
@@ -431,9 +432,17 @@ void eyeInit() {
   idxCry = findAnim("Llorar");
   idxBoot = findAnim("Arranque");
 
-  scr = lv_obj_create(NULL);
+  // Eyes live on the top layer and fade in/out on their own: no screen loads, so they can
+  // never race with another screen transition, and they simply cover whatever is below.
+  scr = lv_obj_create(lv_layer_top());
+  lv_obj_remove_style_all(scr);
+  lv_obj_set_size(scr, 240, 240);
+  lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
   lv_obj_set_style_bg_color(scr, C_BG, 0);
   lv_obj_clear_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(scr, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_flag(scr, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_move_background(scr);  // below the OTA / Wi-Fi overlays
   lv_obj_add_event_cb(scr, eventCb, LV_EVENT_SHORT_CLICKED, NULL);
   lv_obj_add_event_cb(scr, eventCb, LV_EVENT_LONG_PRESSED, NULL);
   view = uiBox(scr);
@@ -441,40 +450,86 @@ void eyeInit() {
   lv_obj_add_event_cb(view, draw, LV_EVENT_DRAW_MAIN, NULL);
 }
 
+static void enqueue(const char* name) {
+  int a = findAnim(name);
+  if (a >= 0 && qn < 4) queue[qn++] = a;
+}
+
 void eyeSetSleepy(bool s) {
-  if (s == sleepy || !active) return;
-  sleepy = s;
-  if (!s) play(findAnim("Despertar"));
+  if (!active || cameo || sad) return;
+  if (s) {
+    if (sleepy || sleepPending) return;
+    sleepPending = true;  // drowsy -> yawn -> asleep
+    qn = 0;
+    play(findAnim("Somnoliento"));
+    enqueue("Bostezo");
+    return;
+  }
+  sleepPending = false;
+  if (!sleepy) return;
+  sleepy = false;
+  play(findAnim("Despertar"));
+}
+
+static void layerOpa(void* o, int32_t v) { lv_obj_set_style_opa((lv_obj_t*)o, (lv_opa_t)v, 0); }
+static void layerGone(lv_anim_t* a) {
+  if (!active) lv_obj_add_flag((lv_obj_t*)a->var, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void layerFade(bool in, uint32_t ms) {
+  lv_anim_del(scr, layerOpa);
+  lv_obj_clear_flag(scr, LV_OBJ_FLAG_HIDDEN);
+  lv_anim_t a;
+  lv_anim_init(&a);
+  lv_anim_set_var(&a, scr);
+  lv_anim_set_exec_cb(&a, layerOpa);
+  lv_anim_set_values(&a, lv_obj_get_style_opa(scr, 0), in ? LV_OPA_COVER : LV_OPA_TRANSP);
+  lv_anim_set_time(&a, ms);
+  if (!in) lv_anim_set_ready_cb(&a, layerGone);
+  lv_anim_start(&a);
 }
 
 static void popIn() {
-  sleepy = sad = false;
+  sleepy = sad = sleepPending = false;
   qn = 0;
-  prevScr = uiMainScreen();  // always return to the main screen, never to ourselves
-  lv_scr_load_anim(scr, LV_SCR_LOAD_ANIM_FADE_ON, 300, 0, false);
+  layerFade(true, 300);
 }
 
 // pop in, play these animations in order, pop out (e.g. "Arranque" + "Saludo" on connect)
-void eyeCameoSeq(const char* const* names, int n) {
+uint32_t eyeCameoSeq(const char* const* names, int n) {
   bool wasActive = active;
   if (!wasActive) popIn();
   active = cameo = true;
-  sad = sleepy = false;
+  sad = sleepy = sleepPending = transition = false;
   qn = 0;
-  for (int i = 1; i < n && qn < 4; i++) {
+  uint32_t total = 0;
+  for (int i = 0; i < n; i++) {
     int a = findAnim(names[i]);
-    if (a >= 0) queue[qn++] = a;
+    if (a < 0) continue;
+    total += animTotal[a];
+    if (i && qn < 4) queue[qn++] = a;
   }
   play(findAnim(names[0]));
+  return total;
 }
+
+// a reaction played right before the screen changes; nothing hides it early
+uint32_t eyeTransition(const char* const* names, int n) {
+  uint32_t ms = eyeCameoSeq(names, n);
+  transition = true;
+  return ms;
+}
+
+bool eyeIsTransition() { return active && transition; }
 
 // PC gone: stay sad (now and then a tear) until it's back or the screen goes off
 void eyeSad() {
   if (!active) popIn();
   active = sad = true;
-  cameo = false;
-  cur = -1;
+  cameo = transition = sleepPending = false;
   qn = 0;
+  play(idxSad);                        // sad, then hold it and cry now and then
+  restUntil = millis() + 1500;
 }
 
 bool eyeIsSad() { return active && sad; }
@@ -493,23 +548,22 @@ bool eyeIsCameo() { return active && cameo; }
 
 void eyeShow() {
   if (active) {
-    cameo = false;  // a cameo that turns into a real idle session stays up
+    if (!transition) cameo = false;  // a cameo that turns into a real idle session stays up
     return;
   }
   cameo = false;
   active = true;
   sleepy = false;
   play(idxBoot);
-  prevScr = uiMainScreen();  // always return to the main screen, never to ourselves
-  lv_scr_load_anim(scr, LV_SCR_LOAD_ANIM_FADE_ON, 500, 0, false);
+  layerFade(true, 500);
 }
 
 void eyeHide() {
   if (!active) return;
-  active = cameo = sad = false;
+  active = cameo = sad = transition = sleepPending = false;
   qn = 0;
   cur = -1;
-  lv_scr_load_anim(prevScr, LV_SCR_LOAD_ANIM_FADE_ON, 300, 0, false);
+  layerFade(false, 300);
 }
 
 bool eyeActive() { return active; }
@@ -532,7 +586,7 @@ void eyeTick() {
         lv_obj_invalidate(view);
         return;
       }
-      if (cameo && qn) {  // next animation of a sequence
+      if (qn) {  // next animation of a sequence
         play(queue[0]);
         for (int i = 1; i < qn; i++) queue[i - 1] = queue[i];
         qn--;
@@ -541,6 +595,12 @@ void eyeTick() {
       }
       if (cameo) {
         eyeHide();
+        return;
+      }
+      if (sleepPending) {  // the drowsy sequence is over: fall asleep
+        sleepPending = false;
+        sleepy = true;
+        lv_obj_invalidate(view);
         return;
       }
       st = BASE_S;

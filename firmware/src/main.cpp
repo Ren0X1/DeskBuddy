@@ -8,6 +8,8 @@ void setup() {
   hwInit();
   uiInit();
   eyeInit();
+  static const char* const boot[] = {"Arranque", "Despertar"};  // power on
+  eyeTransition(boot, 2);
   netInit();
 }
 

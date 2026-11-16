@@ -148,6 +148,8 @@ add("Destello", [[80, {"E": {"w": 70, "h": 96}}], [200, {"E": {"h": 6}}], [400, 
 add("Puntería", [[400, {"dx": -24, "dy": -10}], [400, {"dx": 20, "dy": 8}], [400, {"dx": 6, "dy": -14}], [900, {"dx": 6, "dy": -14}], [300, {}]], "aim")
 add("Escáner vertical", [[500, {"dy": -24, "E": {"h": 10}}], [800, {"dy": 24, "E": {"h": 10}}], [800, {"dy": -24, "E": {"h": 10}}], [400, {}]])
 add("Olas de sonido", hold({"E": {"lb": .25}}, 2000), "wave")
+# context-only: screen switching off (ends hidden, the backlight goes off right after)
+add("Apagar", [[250, {"E": {"h": 2}}], [250, {"E": {"w": 2, "h": 2}}], [500, {"E": {"w": 2, "h": 2}}], [250, _hide], [300, _hide]])
 
 
 # ---------------------------------------------------------------- generators

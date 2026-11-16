@@ -177,7 +177,7 @@ static void fastMonitor() {
   shownGpu += ((on ? pc.gpu : 0) - shownGpu) * 0.2f;
   shownRam += ((on ? pc.ram : 0) - shownRam) * 0.2f;
   shownTemp += ((on ? pc.gpuTemp : 0) - shownTemp) * 0.2f;
-  if (lv_scr_act() != lv_obj_get_screen(tv)) return;
+  if (lv_scr_act() != lv_obj_get_screen(tv) || eyeActive()) return;
   if (uiTile() == TILE_MON) lv_obj_invalidate(monView);
   if (uiTile() == TILE_CLOCK) lv_obj_invalidate(clockView);
 }
@@ -295,6 +295,7 @@ void uiOtaProgress(int pct) {
   otaLastMs = millis();
   if (pct == last || (pct - last < 2 && pct < 100 && last >= 0 && pct > last)) return;
   last = pct;
+  if (eyeActive()) eyeHide();
   if (lv_obj_has_flag(otaLayer, LV_OBJ_FLAG_HIDDEN)) {
     // park on an empty screen so each progress refresh is cheap and the upload gets the CPU
     otaPrevScr = lv_scr_act();
@@ -325,19 +326,20 @@ int uiTile() {
 // ---- screen manager state
 static int baseTile = TILE_MON;  // the screen the user chose; auto screens return here
 static int autoTile = -1;        // screen we switched to on our own (radar / music)
-static uint32_t navByCodeAt = 0; // a tile change we caused (not a swipe)
+static int lastTarget = -1, pendingTile = -1;
+static uint32_t pendingAt = 0;      // last screen the manager settled on (reactions fire on change)
 static bool radarSession = false, radarSuppressed = false, musicSession = false, musicSuppressed = false;
 
 static void tileChanged(lv_event_t* e) {
   int idx = uiTile();
   if (e) {  // the tileview settled on a tile
-    if (navByCodeAt && millis() - navByCodeAt < 1500) {
-      navByCodeAt = 0;
-    } else {  // the user swiped: that's the new home, and leaving an auto screen means "not now"
+    // a finger on the glass in the last 1.5 s means the user moved it; anything else was us
+    if (millis() - lastTouchMs() < 1500) {  // the user swiped: that's the new home, and leaving an auto screen means "not now"
       if (autoTile == TILE_RADAR && idx != TILE_RADAR) radarSuppressed = true;
       if (autoTile == TILE_MUSIC && idx != TILE_MUSIC) musicSuppressed = true;
       autoTile = -1;
       baseTile = idx;
+      lastTarget = idx;  // a swipe is not an automatic change: no reaction
     }
   }
   for (int i = 0; i < TILE_COUNT; i++) {
@@ -348,7 +350,6 @@ static void tileChanged(lv_event_t* e) {
 
 void uiGoTile(int i, bool anim) {
   if (i < 0 || i >= TILE_COUNT) return;
-  if (i != uiTile()) navByCodeAt = millis();
   lv_obj_set_tile_id(tv, i, 0, anim ? LV_ANIM_ON : LV_ANIM_OFF);
   tileChanged(NULL);
 }
@@ -379,7 +380,6 @@ void uiDebug(const char* cmd) {
     eyePlay(atoi(cmd + 5));
   } else if (!strncmp(cmd, "swipe ", 6)) {  // behaves exactly like a finger swipe
     hwPoke();
-    navByCodeAt = 0;
     lv_obj_set_tile_id(tv, atoi(cmd + 6), 0, LV_ANIM_OFF);
   } else if (!strcmp(cmd, "cameo")) {
     eyeCameo();
@@ -431,28 +431,35 @@ static void policy() {
   if (musicSuppressed && now - lastSound > 180000) musicSuppressed = false;   // a manual pick wins for 3 min of quiet
   bool musicWanted = musicSession && !musicSuppressed;
 
-  // ---- moods: boot + hello when the PC connects, sad when it goes away
-  static bool wasOn = false;
+  // ---- moods: hello when the PC connects, sad when it goes away, CRT switch-off after 2 min
+  static bool wasOn = false, wasAsleep = false;
   if (on != wasOn && !forceEye) {
-    if (on) {
+    if (on && cfg.eyesOn && !alertActive()) {
       if (eyeIsSad()) eyeHide();
-      static const char* const hello[] = {"Arranque", "Saludo"};
-      if (cfg.eyesOn && !alertActive()) eyeCameoSeq(hello, 2);
-    } else if (now > 30000 && cfg.eyesOn && !alertActive()) {
-      eyeSad();
+      static const char* const hello[] = {"Sorpresa", "Saludo", "Feliz"};  // 2 - connects
+      static const char* const back[] = {"Arranque", "Saludo"};            // 5 - back from screen off
+      if (wasAsleep) eyeTransition(back, 2);
+      else eyeTransition(hello, 3);
+    } else if (!on && now > 30000 && cfg.eyesOn && !alertActive()) {
+      eyeSad();                                                          // 3 - connection lost
     }
     wasOn = on;
   }
+  if (asleep && !wasAsleep && cfg.eyesOn && !forceEye) {
+    static const char* const off[] = {"Bostezo", "Apagar"};               // 4 - screen goes off
+    eyeTransition(off, 2);
+  }
+  wasAsleep = asleep;
 
   // ---- eyes: never on top of the radar or an alert
   bool idle = cfg.eyesOn && on && pc.idle >= cfg.idleEyeSec && !media.playing;
   bool eyesAllowed = !alertActive() && !radarWanted;
   if (!forceEye) {
     if (on && pc.idle < cfg.idleEyeSec) eyeClearDismiss();
-    if (eyeActive() && !eyesAllowed && !eyeIsSad()) eyeHide();
+    if (eyeActive() && !eyesAllowed && !eyeIsSad() && !eyeIsTransition()) eyeHide();
     else if (eyesAllowed) {
       if (idle && !eyeDismissed() && (!eyeActive() || eyeIsCameo())) eyeShow();
-      if (eyeActive() && !idle && !eyeIsCameo() && !eyeIsSad()) eyeHide();
+      if (eyeActive() && !idle && !eyeIsCameo() && !eyeIsSad() && !eyeIsTransition()) eyeHide();
       if (eyeActive() && !eyeIsCameo() && !eyeIsSad()) eyeSetSleepy(night || pc.idle >= cfg.sleepySec);
     }
     // random cameos while you work
@@ -467,19 +474,47 @@ static void policy() {
     }
   }
 
-  // ---- pick the tile
+  // ---- pick the tile; automatic changes get a reaction first, which hides the switch
   int target = asleep ? TILE_CLOCK : radarWanted ? TILE_RADAR : musicWanted ? TILE_MUSIC : baseTile;
-  bool onMain = lv_scr_act() == lv_obj_get_screen(tv);
-  if (onMain && !alertActive() && !userBusy && uiTile() != target) {
+  bool onMain = lv_scr_act() == lv_obj_get_screen(tv) && !eyeActive();  // nothing covering the tiles
+  if (target != lastTarget && !alertActive() && !userBusy) {
+    static const char* const plane[] = {"Avión a la vista", "Fijar blanco"};  // 6
+    static const char* const gone[] = {"Objetivo perdido", "Parpadeo"};       // 7
+    static const char* const tune[] = {"Nueva canción", "Ritmo musical"};     // 10
+    static const char* const quiet[] = {"Aburrido"};                          // 11
+    const char* const* seq = NULL;
+    int n = 0;
+    if (!asleep) {
+      if (target == TILE_RADAR) seq = plane, n = 2;
+      else if (lastTarget == TILE_RADAR) seq = gone, n = 2;
+      else if (target == TILE_MUSIC) seq = tune, n = 2;
+      else if (lastTarget == TILE_MUSIC) seq = quiet, n = 1;
+    }
+    bool react = seq && lastTarget >= 0 && cfg.eyesOn && !forceEye && !eyeIsSad() &&
+                 (onMain || eyeActive());
+    if (react) {
+      eyeTransition(seq, n);
+      autoTile = (target == baseTile) ? -1 : target;
+      pendingTile = target;  // switched under the eyes once they cover the screen
+      pendingAt = now + 400;
+    }
+    if (react || onMain) lastTarget = target;
+  }
+  if (pendingTile >= 0 && !userBusy && (int32_t)(now - pendingAt) >= 0) {
+    uiGoTile(pendingTile, false);  // hidden behind the eyes: revealed when they leave
+    pendingTile = -1;
+  }
+  if (onMain && pendingTile < 0 && !alertActive() && !userBusy && uiTile() != target) {
     autoTile = (target == baseTile) ? -1 : target;
     uiGoTile(target);
+    lastTarget = target;
   }
 
   // backlight
   uint8_t b = hwUserBrightness();
   bool touched = millis() - lastTouchMs() < WAKE_ON_TOUCH_MS;
   if (night) b = min<uint8_t>(b, cfg.nightMax);
-  if (asleep && !touched) b = 0;  // PC gone -> screen off; data or a touch brings it back
+  if (asleep && !touched && !eyeActive()) b = 0;  // PC gone -> screen off once the eyes have switched off
   if (eyeActive() && night && !touched) b = min<uint8_t>(b, 12);
   hwSetTarget(b);
 }
@@ -541,4 +576,10 @@ void uiInit() {
   lv_timer_create(fastTimer, 30, NULL);
   lv_timer_create(slowTimer, 250, NULL);
   slowTimer(NULL);
+}
+
+// screen-manager state for /api/status (diagnostics)
+void uiPolicyState(int* base, int* autoT, bool* mSess, bool* mSupp, bool* rSess, bool* rSupp) {
+  *base = baseTile; *autoT = autoTile; *mSess = musicSession; *mSupp = musicSuppressed;
+  *rSess = radarSession; *rSupp = radarSuppressed;
 }

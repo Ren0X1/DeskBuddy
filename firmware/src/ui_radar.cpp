@@ -3,6 +3,7 @@
 // world map + route rendered by the PC agent behind the radar sweep.
 #include <ArduinoJson.h>
 #include "app.h"
+#include "settings.h"
 #include "theme.h"
 
 #define RADAR_R 112
@@ -520,8 +521,18 @@ void alertTick() {
     if (left <= 0) alertClose();
     return;
   }
-  // wait (briefly) for the map to arrive before showing
-  if (pending.id && (mapReadyId == pending.id || millis() - pending.at > 6000)) alertShow();
+  // wait (briefly) for the map, play the reaction, then open the alert
+  static uint16_t reactedId = 0;
+  static uint32_t showAt = 0;
+  if (pending.id && (mapReadyId == pending.id || millis() - pending.at > 6000)) {
+    if (reactedId != pending.id) {
+      reactedId = pending.id;
+      static const char* const emerg[] = {"Susto", "Alerta"};
+      static const char* const notable[] = {"Curioso", "Ojo de halcón"};
+      showAt = millis() + (cfg.eyesOn ? eyeTransition(pending.emergency ? emerg : notable, 2) : 0);
+    }
+    if ((int32_t)(millis() - showAt) >= -120) alertShow();
+  }
 }
 
 bool alertActive() { return alertOn; }
