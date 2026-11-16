@@ -11,7 +11,8 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = Path(__file__).resolve().parent.parent
 FONTS = Path(__file__).resolve().parent / "fonts"
 OUT = ROOT / "firmware" / "src" / "fonts"
-INTER = FONTS / "Inter.ttf"
+B612R = FONTS / "B612Mono-Regular.ttf"   # Airbus cockpit font (OFL)
+B612B = FONTS / "B612Mono-Bold.ttf"
 ICONS = FONTS / "MaterialIcons-Regular.ttf"
 
 LATIN1 = list(range(0x20, 0x7F)) + list(range(0xA0, 0x100)) + [0x2192, 0x2022]  # + → •
@@ -29,12 +30,12 @@ ICON_SET = {
 
 # (c name, ttf, px, weight, charset, fallback)
 SPECS = [
-    ("font_cap", INTER, 11, 650, LATIN1, None),
-    ("font_small", INTER, 13, 500, LATIN1, "icons_16"),
-    ("font_body", INTER, 16, 600, LATIN1, "icons_16"),
-    ("font_value", INTER, 20, 600, LATIN1, "icons_24"),
-    ("font_num", INTER, 56, 600, DIGITS, None),
-    ("font_clock", INTER, 62, 300, DIGITS, None),
+    ("font_tiny", B612B, 9, None, LATIN1, None),
+    ("font_cap", B612B, 11, None, LATIN1, None),
+    ("font_small", B612R, 12, None, LATIN1, "icons_16"),
+    ("font_body", B612B, 14, None, LATIN1, "icons_16"),
+    ("font_value", B612B, 18, None, LATIN1, "icons_24"),
+    ("font_num", B612B, 26, None, DIGITS, None),
     ("icons_16", ICONS, 16, None, sorted(ICON_SET.values()), None),
     ("icons_24", ICONS, 24, None, sorted(ICON_SET.values()), None),
     ("icons_32", ICONS, 32, None, sorted(ICON_SET.values()), None),
@@ -150,7 +151,8 @@ def utf8_escape(cp: int) -> str:
 
 
 SOURCES = {  # both fonts are open source (OFL / Apache 2.0)
-    INTER: "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz,wght%5D.ttf",
+    B612R: "https://raw.githubusercontent.com/google/fonts/main/ofl/b612mono/B612Mono-Regular.ttf",
+    B612B: "https://raw.githubusercontent.com/google/fonts/main/ofl/b612mono/B612Mono-Bold.ttf",
     ICONS: "https://raw.githubusercontent.com/google/material-design-icons/master/font/"
            "MaterialIcons-Regular.ttf",
 }

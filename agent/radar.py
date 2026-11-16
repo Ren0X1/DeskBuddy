@@ -196,12 +196,15 @@ class Routes:
         return o, d
 
     @staticmethod
-    def _label(a: dict) -> str:
+    def label(a: dict | None) -> str:
+        """'LEMG Málaga' (ICAO + city)"""
+        if not a:
+            return ""
         return f"{a['icao']} {a['city']}".strip() if a.get("city") else a["icao"]
 
     def text(self, o, d) -> str:
         """'LEMG Málaga → EYKA Kaunas'"""
-        return f"{self._label(o)} → {self._label(d)}" if o and d else ""
+        return f"{self.label(o)} → {self.label(d)}" if o and d else ""
 
 
 # ------------------------------------------------------------------ world map
@@ -395,7 +398,8 @@ class Radar:
             out.append({"c": cs[:9], "ty": (a.get("t") or "")[:7], "x": round(x, 2), "y": round(y, 2),
                         "al": int((alt or 0) * 0.3048), "s": int((a.get("gs") or 0) * 1.852),
                         "h": int(a.get("track") or a.get("true_heading") or 0),
-                        "rt": self.routes.text(o, dd)[:47], "md": model[:31]})
+                        "ro": self.routes.label(o)[:31], "rd": self.routes.label(dd)[:31],
+                        "md": model[:31]})
         return {"t": "radar", "on": 1, "r": radius, "auto": bool(rc.get("auto_show", True)), "ac": out}
 
     # -- spotlight
@@ -472,7 +476,8 @@ class Radar:
         if a.get("r"):
             model = f"{model} · {a['r']}" if model else a["r"]
         msg = {"t": "alert", "id": aid, "lbl": label, "c": cs[:11], "m": model[:39],
-               "rt": self.routes.text(o, d), "em": emergency, "sec": int(secs),
+               "ro": self.routes.label(o)[:39], "rd": self.routes.label(d)[:39],
+               "em": emergency, "sec": int(secs),
                "dt": f"{thousands(int(alt * 0.3048))} m · {int((a.get('gs') or 0) * 1.852)} km/h",
                "p": list(p)}
         if "o" in marks:

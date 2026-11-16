@@ -94,6 +94,12 @@ def idle_seconds() -> int:
 
 # ------------------------------------------------------------------ GPU (NVIDIA)
 def gpu_reader() -> None:
+    try:
+        name = subprocess.run(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"], capture_output=True,
+                              text=True, creationflags=NO_WINDOW, timeout=10).stdout.strip().splitlines()[0]
+        gpu["gn"] = name.replace("NVIDIA ", "").replace("GeForce ", "")[:23]
+    except Exception:
+        pass
     cmd = ["nvidia-smi", "--query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total",
            "--format=csv,noheader,nounits", "-lms", "1000"]
     while True:
@@ -193,10 +199,15 @@ def encode_art(raw: bytes) -> tuple[bytes, int]:
     s = min(w, h)
     im = im.crop(((w - s) // 2, (h - s) // 2, (w + s) // 2, (h + s) // 2))
     im = im.resize((ART_SIZE, ART_SIZE), Image.LANCZOS)
+    accent = pick_accent(im)
+    # phosphor look: luminance -> green ramp, like a night-vision HUD
+    lum = im.convert("L")
+    im = Image.merge("RGB", (lum.point(lambda v: int(v * .22)), lum.point(lambda v: int(min(255, v * 1.05))),
+                             lum.point(lambda v: int(v * .53))))
     px = bytearray()
     for r, g, b in im.getdata():
         px += struct.pack("<H", ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3))
-    return bytes(px), pick_accent(im)
+    return bytes(px), accent
 
 
 def send_art() -> None:

@@ -5,10 +5,6 @@
 #include "app.h"
 #include "theme.h"
 
-#define G_BRIGHT lv_color_hex(0x39FF88)
-#define G_MID lv_color_hex(0x22B86C)
-#define G_DIM lv_color_hex(0x13633C)
-#define G_FAINT lv_color_hex(0x0A3A23)
 #define RADAR_R 112
 #define MAX_PLANES 10
 #define WEDGE 9
@@ -17,7 +13,7 @@
 
 // ================================================================= data
 struct Plane {
-  char cs[10], type[8], route[48], model[32];
+  char cs[10], type[8], org[32], dst[32], model[32];
   float x, y;  // km east / north of home
   int alt, spd, hdg;
   float glow;
@@ -31,7 +27,7 @@ static char selCs[10] = "";
 
 struct Alert {
   uint16_t id = 0;
-  char label[32] = "", cs[12] = "", model[40] = "", route[56] = "", data[48] = "";
+  char label[32] = "", cs[12] = "", model[40] = "", org[40] = "", dst[40] = "", data[48] = "";
   int px = 120, py = 120, ox = -1, oy = -1, dx = -1, dy = -1, secs = 60;
   char o[6] = "", d[6] = "";
   bool emergency = false;
@@ -96,7 +92,7 @@ static void sweepSet(Sweep& s) {
 // ================================================================= radar tile
 static lv_obj_t *blip[MAX_PLANES], *tail[MAX_PLANES], *tag[MAX_PLANES], *selRing;
 static lv_point_t tailPts[MAX_PLANES][2];
-static lv_obj_t *pnl1, *pnl2, *pnl3, *pnl4, *ringLbl[3];
+static lv_obj_t *pnl1, *pnl2, *pnl3, *pnl4, *pnl5, *ringLbl[3];
 
 static lv_obj_t* circle(lv_obj_t* p, int d, lv_color_t border, int bw, lv_color_t fill, lv_opa_t fillOpa) {
   lv_obj_t* c = uiBox(p);
@@ -165,12 +161,14 @@ void radarBuild(lv_obj_t* t) {
   lv_obj_center(home);
 
   // callsign / model / route + distance / altitude + speed
-  lv_obj_t* b = panel(t, 60, 74);
+  // callsign+type / model / ORG / DST / distance+alt+speed
+  lv_obj_t* b = panel(t, 58, 82);
   pnl1 = panelLine(b, &font_body, G_BRIGHT, 3);
-  pnl4 = panelLine(b, &font_small, G_MID, 22);
-  pnl2 = panelLine(b, &font_small, G_MID, 38);
-  lv_label_set_long_mode(pnl2, LV_LABEL_LONG_SCROLL_CIRCULAR);  // long ICAO routes scroll
-  pnl3 = panelLine(b, &font_small, G_DIM, 54);
+  pnl4 = panelLine(b, &font_small, G_MID, 20);
+  pnl2 = panelLine(b, &font_small, G_BRIGHT, 35);
+  pnl5 = panelLine(b, &font_small, G_BRIGHT, 50);
+  pnl3 = panelLine(b, &font_tiny, G_MID, 66);
+  for (lv_obj_t* l : {pnl2, pnl5}) lv_label_set_long_mode(l, LV_LABEL_LONG_SCROLL_CIRCULAR);
 
   for (int i = 0; i < MAX_PLANES; i++) {
     tail[i] = lv_line_create(t);
@@ -215,7 +213,8 @@ void radarOnJson(JsonDocument& d) {
     if (glow < 0) newcomer = true;
     strlcpy(p.cs, cs, sizeof p.cs);
     strlcpy(p.type, a["ty"] | "", sizeof p.type);
-    strlcpy(p.route, a["rt"] | "", sizeof p.route);
+    strlcpy(p.org, a["ro"] | "", sizeof p.org);
+    strlcpy(p.dst, a["rd"] | "", sizeof p.dst);
     strlcpy(p.model, a["md"] | "", sizeof p.model);
     p.x = a["x"] | 0.0f;
     p.y = a["y"] | 0.0f;
@@ -231,6 +230,7 @@ void radarOnJson(JsonDocument& d) {
     if (!strcmp(planes[i].cs, selCs)) selected = i;
   if (nPlanes) strlcpy(selCs, planes[selected].cs, sizeof selCs);
 
+  if (newcomer && nPlanes && eyeActive()) eyeReact("Avión a la vista");
   if (autoShow && newcomer && nPlanes && !alertOn && !eyeActive() && !media.playing &&
       millis() - lastTouchMs() > 15000 && uiTile() != TILE_RADAR)
     uiGoTile(TILE_RADAR);
@@ -306,6 +306,7 @@ void radarTick() {
     }
     uiSetText(pnl3, "");
     uiSetText(pnl4, "");
+    uiSetText(pnl5, "");
     if (!pcOnline() || !fresh) nPlanes = 0;
     return;
   }
@@ -315,6 +316,7 @@ void radarTick() {
     uiSetText(pnl2, b);
     uiSetText(pnl3, "");
     uiSetText(pnl4, "");
+    uiSetText(pnl5, "");
     return;
   }
   Plane& p = planes[selected];
@@ -322,7 +324,10 @@ void radarTick() {
   uiSetText(pnl1, b);
   uiSetText(pnl4, p.model[0] ? p.model : p.type);
   float dist = sqrtf(p.x * p.x + p.y * p.y);
-  uiSetText(pnl2, p.route[0] ? p.route : "Ruta desconocida");
+  snprintf(b, sizeof b, "ORG %s", p.org[0] ? p.org : "----");
+  uiSetText(pnl2, b);
+  snprintf(b, sizeof b, "DST %s", p.dst[0] ? p.dst : "----");
+  uiSetText(pnl5, b);
   char alt[12];
   fmtThousands(alt, sizeof alt, p.alt);
   snprintf(b, sizeof b, "%.1fkm · %sm · %dkm/h", dist, alt, p.spd);
@@ -331,7 +336,7 @@ void radarTick() {
 
 // ================================================================= spotlight alert
 static lv_obj_t *alScr, *alPrev, *alImg, *alPlane, *alPulse, *alO, *alD, *alCap, *alCs;
-static lv_obj_t *alRoute, *alModel, *alData, *alArc;
+static lv_obj_t *alRoute, *alDst, *alModel, *alData, *alArc;
 static lv_img_dsc_t mapDsc;
 
 static void setSize(void* o, int32_t v) {
@@ -384,11 +389,12 @@ void alertBuild() {
   lv_obj_set_style_pad_hor(alCs, 6, 0);
   lv_obj_set_style_radius(alCs, 6, 0);
 
-  lv_obj_t* b = panel(alScr, 72);
-  alRoute = panelLine(b, &font_body, C_TXT, 3);
-  lv_label_set_long_mode(alRoute, LV_LABEL_LONG_SCROLL_CIRCULAR);
-  alModel = panelLine(b, &font_small, C_TXT2, 22);
-  alData = panelLine(b, &font_small, C_TXT3, 38);
+  lv_obj_t* b = panel(alScr, 66, 78);
+  alRoute = panelLine(b, &font_small, G_BRIGHT, 4);
+  alDst = panelLine(b, &font_small, G_BRIGHT, 20);
+  for (lv_obj_t* l : {alRoute, alDst}) lv_label_set_long_mode(l, LV_LABEL_LONG_SCROLL_CIRCULAR);
+  alModel = panelLine(b, &font_small, G_MID, 37);
+  alData = panelLine(b, &font_tiny, G_MID, 56);
 }
 
 static void place(lv_obj_t* l, int x, int y, const char* txt) {
@@ -420,7 +426,11 @@ static void alertShow() {
   lv_obj_set_style_arc_color(alArc, c, LV_PART_INDICATOR);
   lv_label_set_text(alCap, shown.label);
   lv_label_set_text(alCs, shown.cs);
-  lv_label_set_text(alRoute, shown.route[0] ? shown.route : "Ruta desconocida");
+  char rb[56];
+  snprintf(rb, sizeof rb, "ORG %s", shown.org[0] ? shown.org : "----");
+  lv_label_set_text(alRoute, rb);
+  snprintf(rb, sizeof rb, "DST %s", shown.dst[0] ? shown.dst : "----");
+  lv_label_set_text(alDst, rb);
   lv_label_set_text(alModel, shown.model);
   lv_label_set_text(alData, shown.data);
   place(alO, shown.ox, shown.oy, shown.o);
@@ -457,7 +467,8 @@ void alertOnJson(JsonDocument& d) {
   strlcpy(a.label, d["lbl"] | "", sizeof a.label);
   strlcpy(a.cs, d["c"] | "", sizeof a.cs);
   strlcpy(a.model, d["m"] | "", sizeof a.model);
-  strlcpy(a.route, d["rt"] | "", sizeof a.route);
+  strlcpy(a.org, d["ro"] | "", sizeof a.org);
+  strlcpy(a.dst, d["rd"] | "", sizeof a.dst);
   strlcpy(a.data, d["dt"] | "", sizeof a.data);
   a.emergency = d["em"] | false;
   a.secs = d["sec"] | 60;
@@ -521,7 +532,7 @@ void alertDebug() {  // serial "alert": demo without map
   JsonDocument d;
   deserializeJson(d,
                   "{\"id\":65000,\"lbl\":\"EMERGENCIA · 7700\",\"c\":\"IBE6253\",\"m\":\"Airbus "
-                  "A350-900\",\"rt\":\"MAD → MEX\",\"dt\":\"10.360 m · 870 km/h\",\"em\":true,"
+                  "A350-900\",\"ro\":\"LEMD Madrid\",\"rd\":\"MMMX Mexico City\",\"dt\":\"10.360 m · 870 km/h\",\"em\":true,"
                   "\"sec\":20,\"p\":[132,118],\"o\":[70,96,\"MAD\"],\"d\":[196,150,\"MEX\"]}");
   shown.id = 0;
   alertOnJson(d);

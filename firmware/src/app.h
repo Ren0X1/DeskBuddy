@@ -10,6 +10,7 @@ struct PcStats {
   float cpu = 0, ram = 0, gpu = 0, gpuTemp = 0, vram = 0;
   uint32_t idle = 0;  // seconds since last keyboard/mouse input on the PC
   char host[24] = "";
+  char gpuName[24] = "";
   uint32_t lastRx = 0;
 };
 
@@ -92,3 +93,5 @@ bool eyeActive();
 bool eyeDismissed();
 void eyeClearDismiss();
 void eyeSetSleepy(bool s);
+void eyePlay(int idx);          // debug / triggers
+void eyeReact(const char* name); // play an animation by name if the eyes are up

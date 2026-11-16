@@ -2,12 +2,12 @@
 #pragma once
 #include "lvgl.h"
 
+extern const lv_font_t font_tiny;
 extern const lv_font_t font_cap;
 extern const lv_font_t font_small;
 extern const lv_font_t font_body;
 extern const lv_font_t font_value;
 extern const lv_font_t font_num;
-extern const lv_font_t font_clock;
 extern const lv_font_t icons_16;
 extern const lv_font_t icons_24;
 extern const lv_font_t icons_32;

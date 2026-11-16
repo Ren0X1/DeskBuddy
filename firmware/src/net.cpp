@@ -151,6 +151,7 @@ static void handleUdp() {
       pc.vram = d["vram"] | 0.0f;
       pc.idle = d["idle"] | 0;
       strlcpy(pc.host, d["host"] | "PC", sizeof pc.host);
+      strlcpy(pc.gpuName, d["gn"] | "", sizeof pc.gpuName);
       pc.lastRx = millis();
       onHome(d["home"]);
     } else if (!strcmp(t, "media")) {

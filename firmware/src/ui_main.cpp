@@ -3,22 +3,11 @@
 #include <WiFi.h>
 #include <time.h>
 #include "app.h"
+#include "hud.h"
 #include "theme.h"
 
 static lv_obj_t *tv, *dots[TILE_COUNT];
 
-// clock
-static lv_obj_t *clkMeter, *lblDate, *lblTime, *lblWxIcon, *lblWxTemp, *lblWxDesc, *lblCity, *lblNoWifi;
-static lv_meter_indicator_t* clkSec;
-
-// monitor
-static lv_obj_t *monMeter, *lblCpu, *lblHost;
-static lv_meter_indicator_t *iNorm, *iWarn, *iHot;
-struct StatCol {
-  lv_obj_t *val, *bar;
-};
-static StatCol colGpu, colRam, colTemp;
-static float shownCpu = 0, shownGpu = 0, shownRam = 0, shownTemp = 0;
 
 // info
 static lv_obj_t *lblIp, *lblWifi, *lblUp, *slider;
@@ -39,145 +28,147 @@ bool isNight() {
              : (ti.tm_hour >= NIGHT_START_HOUR && ti.tm_hour < NIGHT_END_HOUR);
 }
 
-static const char* wxIcon(int c, bool day) {
-  if (c == 0) return day ? ICON_SUN : ICON_MOON;
-  if (c <= 2) return day ? ICON_PARTLY : ICON_MOON;
-  if (c == 3) return ICON_CLOUD;
-  if (c <= 48) return ICON_FOG;
-  if (c <= 57) return ICON_DRIZZLE;
-  if (c <= 67 || (c >= 80 && c <= 82)) return ICON_RAIN;
-  if (c <= 77 || c == 85 || c == 86) return ICON_SNOW;
-  return ICON_STORM;
+// ================================================================= clock (style C: phosphor CRT)
+static lv_obj_t* clockView;
+
+static const char* wxShort(int c) {
+  if (c == 0) return "DESPEJADO";
+  if (c <= 2) return "POCO NUBOSO";
+  if (c == 3) return "NUBLADO";
+  if (c <= 48) return "NIEBLA";
+  if (c <= 57) return "LLOVIZNA";
+  if (c <= 67) return "LLUVIA";
+  if (c <= 77) return "NIEVE";
+  if (c <= 82) return "CHUBASCOS";
+  if (c <= 86) return "NEVADAS";
+  return "TORMENTA";
 }
 
-static const char* wxText(int c) {
-  if (c == 0) return "Despejado";
-  if (c == 1) return "Casi despejado";
-  if (c == 2) return "Poco nuboso";
-  if (c == 3) return "Nublado";
-  if (c <= 48) return "Niebla";
-  if (c <= 57) return "Llovizna";
-  if (c <= 67) return "Lluvia";
-  if (c <= 77) return "Nieve";
-  if (c <= 82) return "Chubascos";
-  if (c <= 86) return "Nevadas";
-  return "Tormenta";
-}
+static void drawClock(lv_event_t* e) {
+  static const char* DAYS[] = {"DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"};
+  static const char* MON[] = {"ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"};
+  Hud h;
+  hudBegin(h, e);
+  for (int i = 0; i < 60; i++) {
+    float a = i * 6 * DEG_TO_RAD;
+    int r2 = i % 5 ? 104 : 96;
+    hudLine(h, 120 + 110 * sinf(a), 120 - 110 * cosf(a), 120 + r2 * sinf(a), 120 - r2 * cosf(a),
+            i % 5 ? G_DIM : G_MID, i % 5 ? 1 : 2);
+  }
+  hudRing(h, 120, 120, 40, 1, G_FAINT);
+  hudRing(h, 120, 120, 76, 1, G_FAINT);
 
-// ================================================================= clock
-static void buildClock(lv_obj_t* t) {
-  lv_meter_scale_t* sc;
-  clkMeter = uiTickMeter(t, &sc, 60, 5, 2, 7, 13, 59, 354, 270);
-  clkSec = lv_meter_add_scale_lines(clkMeter, sc, C_ACCENT, C_ACCENT, false, 0);
-  lv_meter_set_indicator_start_value(clkMeter, clkSec, 0);
-
-  lblNoWifi = uiLabel(t, &icons_16, C_HOT, ICON_WIFI_OFF);
-  lv_obj_align(lblNoWifi, LV_ALIGN_CENTER, 0, -72);
-
-  lblDate = uiCaption(t, "");
-  lv_obj_align(lblDate, LV_ALIGN_CENTER, 0, -48);
-  lblTime = uiLabel(t, &font_clock, C_TXT, "--:--");
-  lv_obj_align(lblTime, LV_ALIGN_CENTER, 0, -10);
-
-  lv_obj_t* row = uiRow(t, 6);
-  lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_align(row, LV_ALIGN_CENTER, 0, 36);
-  lblWxIcon = uiLabel(row, &icons_24, C_ACCENT, "");
-  lblWxTemp = uiLabel(row, &font_value, C_TXT, "");
-  lblWxDesc = uiLabel(t, &font_small, C_TXT2, "");
-  lv_obj_align(lblWxDesc, LV_ALIGN_CENTER, 0, 60);
-  lblCity = uiCaption(t, "", C_TXT3);
-  lv_obj_align(lblCity, LV_ALIGN_CENTER, 0, 80);
-}
-
-static void tickClock() {
-  static const char* DAYS[] = {"DOMINGO", "LUNES", "MARTES", "MIÉRCOLES", "JUEVES", "VIERNES", "SÁBADO"};
-  static const char* MON[] = {"ENE", "FEB", "MAR", "ABR", "MAY", "JUN",
-                              "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"};
-  char b[64];
   struct tm ti;
-  if (timeValid(ti)) {
-    snprintf(b, sizeof b, "%02d:%02d", ti.tm_hour, ti.tm_min);
-    uiSetText(lblTime, b);
-    snprintf(b, sizeof b, "%s · %d %s", DAYS[ti.tm_wday], ti.tm_mday, MON[ti.tm_mon]);
-    uiSetText(lblDate, b);
-    static int lastSec = -1;
-    if (ti.tm_sec != lastSec) {
-      lastSec = ti.tm_sec;
-      lv_meter_set_indicator_end_value(clkMeter, clkSec, ti.tm_sec);
-    }
+  bool ok = timeValid(ti);
+  struct timeval now;
+  gettimeofday(&now, NULL);
+  float sec = ok ? ti.tm_sec + now.tv_usec / 1e6f : 0;
+  float sa = sec * 6;  // seconds = radar sweep
+  for (int k = 0; k < 8; k++) {
+    float a1 = sa - k * 4, a0 = a1 - 4, f = 1.0f - k / 8.0f;
+    hudArc(h, 120, 120, 106, 106, (int)(a0 - 90), (int)(a1 - 90), G_BRIGHT, (lv_opa_t)(80 * f * f));
+  }
+  float ar = sa * DEG_TO_RAD;
+  hudLine(h, 120, 120, 120 + 106 * sinf(ar), 120 - 106 * cosf(ar), G_BRIGHT, 2);
+  if (ok) {
+    float hm = ((ti.tm_hour % 12) + ti.tm_min / 60.0f) * 30 * DEG_TO_RAD;
+    float mm = (ti.tm_min + sec / 60) * 6 * DEG_TO_RAD;
+    hudLine(h, 120, 120, 120 + 46 * sinf(hm), 120 - 46 * cosf(hm), G_BRIGHT, 4);
+    hudLine(h, 120, 120, 120 + 74 * sinf(mm), 120 - 74 * cosf(mm), G_MID, 3);
+  }
+  hudCircle(h, 120, 120, 3, G_BRIGHT);
+
+  hudRect(h, 62, 146, 116, 54, C_BG, 0, 6, LV_OPA_80);
+  char b[40];
+  if (ok) snprintf(b, sizeof b, "%02d:%02d", ti.tm_hour, ti.tm_min);
+  else strcpy(b, "--:--");
+  hudText(h, b, 120, 162, &font_num, G_BRIGHT);
+  if (ok) {
+    snprintf(b, sizeof b, "%s %d %s", DAYS[ti.tm_wday], ti.tm_mday, MON[ti.tm_mon]);
+    hudText(h, b, 120, 181, &font_tiny, G_MID);
   }
   if (weather.valid) {
-    uiSetText(lblWxIcon, wxIcon(weather.code, weather.isDay));
-    snprintf(b, sizeof b, "%d°", (int)lroundf(weather.temp));
-    uiSetText(lblWxTemp, b);
-    snprintf(b, sizeof b, "%s · %d° / %d°", wxText(weather.code), (int)lroundf(weather.tmin),
-             (int)lroundf(weather.tmax));
-    uiSetText(lblWxDesc, b);
-    String city = weather.city;
-    city.toUpperCase();
-    uiSetText(lblCity, city.c_str());
+    snprintf(b, sizeof b, "%d° %s", (int)lroundf(weather.temp), wxShort(weather.code));
+    hudText(h, b, 120, 192, &font_tiny, G_MID);
   }
-  if (WiFi.isConnected()) lv_obj_add_flag(lblNoWifi, LV_OBJ_FLAG_HIDDEN);
-  else lv_obj_clear_flag(lblNoWifi, LV_OBJ_FLAG_HIDDEN);
+  if (!WiFi.isConnected()) hudText(h, "SIN WIFI", 120, 52, &font_cap, C_WARN);
+  else if (weather.city[0]) {
+    String c = weather.city;
+    c.toUpperCase();
+    hudText(h, c.c_str(), 120, 52, &font_tiny, G_DIM);
+  }
+  hudScanlines(h, LV_OPA_40);
 }
 
-// ================================================================= monitor
-static StatCol makeCol(lv_obj_t* t, int x, const char* cap) {
-  lv_obj_t* c = uiBox(t);
-  lv_obj_set_size(c, 52, LV_SIZE_CONTENT);
-  lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_flex_align(c, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_row(c, 3, 0);
-  lv_obj_align(c, LV_ALIGN_CENTER, x, 50);
-  uiCaption(c, cap, C_TXT3);
-  StatCol s;
-  s.val = uiLabel(c, &font_body, C_TXT, "--");
-  s.bar = uiBar(c, 32, 3, C_ACCENT);
-  return s;
+static lv_obj_t* hudView(lv_obj_t* parent, lv_event_cb_t draw) {
+  lv_obj_t* o = uiBox(parent);
+  lv_obj_set_size(o, 240, 240);
+  lv_obj_set_pos(o, 0, 0);
+  lv_obj_add_event_cb(o, draw, LV_EVENT_DRAW_MAIN, NULL);
+  return o;
 }
 
-static void buildMonitor(lv_obj_t* t) {
-  lv_meter_scale_t* sc;
-  monMeter = uiTickMeter(t, &sc, 51, 5, 3, 11, 17, 100, 270, 135);
-  lv_meter_indicator_t* red = lv_meter_add_scale_lines(monMeter, sc, C_HOT_DIM, C_HOT_DIM, false, 0);
-  lv_meter_set_indicator_start_value(monMeter, red, 90);
-  lv_meter_set_indicator_end_value(monMeter, red, 100);
-  iNorm = lv_meter_add_scale_lines(monMeter, sc, C_ACCENT, C_ACCENT, false, 0);
-  iWarn = lv_meter_add_scale_lines(monMeter, sc, C_WARN, C_WARN, false, 0);
-  iHot = lv_meter_add_scale_lines(monMeter, sc, C_HOT, C_HOT, false, 0);
-  lv_meter_set_indicator_start_value(monMeter, iWarn, 76);
-  lv_meter_set_indicator_start_value(monMeter, iHot, 90);
+static void buildClock(lv_obj_t* t) { clockView = hudView(t, drawClock); }
 
-  lv_obj_t* cap = uiCaption(t, "CPU");
-  lv_obj_align(cap, LV_ALIGN_CENTER, 0, -50);
-  lv_obj_t* row = uiRow(t, 2);
-  lv_obj_align(row, LV_ALIGN_CENTER, 0, -14);
-  lblCpu = uiLabel(row, &font_num, C_TXT, "--");
-  lv_obj_t* pct = uiLabel(row, &font_value, C_TXT3, "%");
-  lv_obj_set_style_pad_bottom(pct, 9, 0);
+static void tickClock() {}
 
-  lv_obj_t* div = uiBox(t);
-  lv_obj_set_size(div, 120, 1);
-  lv_obj_set_style_bg_opa(div, LV_OPA_COVER, 0);
-  lv_obj_set_style_bg_color(div, C_SURFACE2, 0);
-  lv_obj_align(div, LV_ALIGN_CENTER, 0, 22);
+// ================================================================= monitor (style A: combat HUD)
+static lv_obj_t* monView;
+static float shownCpu = 0, shownGpu = 0, shownRam = 0, shownTemp = 0;
 
-  colGpu = makeCol(t, -54, "GPU");
-  colRam = makeCol(t, 0, "RAM");
-  colTemp = makeCol(t, 54, "TEMP");
-
-  lblHost = uiCaption(t, "", C_TXT3);
-  lv_obj_align(lblHost, LV_ALIGN_CENTER, 0, 92);
+static void tape(Hud& h, int x, float v, const char* lab, int side, bool on) {
+  if (hudClipPush(h, x - 22, 62, 44, 118)) {
+    for (int k = (int)floorf((v - 30) / 5) * 5; k <= v + 30; k += 5) {
+      if (k < 0 || k > 100) continue;
+      float y = 121 - (k - v) * 2.2f;
+      bool big = k % 10 == 0;
+      hudLine(h, x + side * 14, y, x + side * (big ? 4 : 9), y, G_BRIGHT, 1);
+      if (big) {
+        char b[6];
+        snprintf(b, sizeof b, "%d", k);
+        hudText(h, b, x - side * 8, (int)y, &font_tiny, G_MID);
+      }
+    }
+  }
+  hudClipPop(h);
+  hudRect(h, x - 20, 112, 40, 18, C_BG);
+  hudRect(h, x - 20, 112, 40, 18, v >= 90 ? C_HOT : v >= 75 ? C_WARN : G_BRIGHT, 2);
+  char b[6];
+  if (on) snprintf(b, sizeof b, "%d", (int)lroundf(v));
+  else strcpy(b, "--");
+  hudText(h, b, x, 121, &font_body, v >= 90 ? C_HOT : v >= 75 ? C_WARN : G_BRIGHT);
+  hudText(h, lab, x, 52, &font_cap, G_BRIGHT);
 }
 
-static void setCol(StatCol& c, float v, float barPct, const char* fmt) {
-  char b[16];
-  snprintf(b, sizeof b, fmt, (int)lroundf(v));
-  uiSetText(c.val, b);
-  lv_bar_set_value(c.bar, (int)(constrain(barPct, 0, 100) * 10), LV_ANIM_OFF);
-  lv_obj_set_style_bg_color(c.bar, uiLoadColor(barPct, C_ACCENT), LV_PART_INDICATOR);
+static void drawMonitor(lv_event_t* e) {
+  Hud h;
+  hudBegin(h, e);
+  bool on = pcOnline();
+  tape(h, 52, shownCpu, "CPU", 1, on);
+  tape(h, 188, shownGpu, "GPU", -1, on);
+  // velocity vector rides with the CPU load
+  float vy = 108 - (shownCpu - 50) * 0.5f;
+  hudRing(h, 120, (int)vy, 6, 2, G_BRIGHT);
+  hudLine(h, 104, vy, 113, vy, G_BRIGHT, 2);
+  hudLine(h, 127, vy, 136, vy, G_BRIGHT, 2);
+  hudLine(h, 120, vy - 6, 120, vy - 13, G_BRIGHT, 2);
+  char b[32];
+  String host = on ? String(pc.host) : String("RNXPC");
+  host.toUpperCase();
+  hudText(h, on ? host.c_str() : (WiFi.isConnected() ? "ESPERANDO PC" : "SIN WIFI"), 120, 38, &font_cap,
+          on ? G_BRIGHT : C_WARN);
+  if (on) {
+    snprintf(b, sizeof b, "RAM %d%%", (int)lroundf(shownRam));
+    hudText(h, b, 120, 152, &font_body, G_BRIGHT);
+    snprintf(b, sizeof b, "TMP %d°C", (int)lroundf(shownTemp));
+    hudText(h, b, 120, 172, &font_cap, shownTemp > 80 ? C_WARN : G_MID);
+    snprintf(b, sizeof b, "VRAM %d%%", (int)lroundf(pc.vram));
+    hudText(h, b, 120, 188, &font_tiny, G_DIM);
+  }
+  if (pc.gpuName[0]) hudText(h, pc.gpuName, 120, 204, &font_tiny, G_DIM);
 }
+
+static void buildMonitor(lv_obj_t* t) { monView = hudView(t, drawMonitor); }
 
 static void fastMonitor() {
   bool on = pcOnline();
@@ -185,41 +176,12 @@ static void fastMonitor() {
   shownGpu += ((on ? pc.gpu : 0) - shownGpu) * 0.2f;
   shownRam += ((on ? pc.ram : 0) - shownRam) * 0.2f;
   shownTemp += ((on ? pc.gpuTemp : 0) - shownTemp) * 0.2f;
-  // the meter redraws all 51 ticks on every set -> only touch it when a tick changes
-  static int lastV = -1;
-  int v = (int)lroundf(shownCpu) / 2 * 2;
-  if (v != lastV) {
-    lastV = v;
-    lv_meter_set_indicator_end_value(monMeter, iNorm, min(v, 75));
-    lv_meter_set_indicator_end_value(monMeter, iWarn, v >= 76 ? min(v, 89) : -1);
-    lv_meter_set_indicator_end_value(monMeter, iHot, v >= 90 ? v : -1);
-  }
-  if (on) {
-    setCol(colGpu, pc.gpu, shownGpu, "%d%%");
-    setCol(colRam, pc.ram, shownRam, "%d%%");
-    // 30 °C -> empty bar, 90 °C -> full
-    setCol(colTemp, pc.gpuTemp, (shownTemp - 30) * 100 / 60, "%d°");
-  }
+  if (lv_scr_act() != lv_obj_get_screen(tv)) return;
+  if (uiTile() == TILE_MON) lv_obj_invalidate(monView);
+  if (uiTile() == TILE_CLOCK) lv_obj_invalidate(clockView);
 }
 
-static void tickMonitor() {
-  bool on = pcOnline();
-  char b[8];
-  if (on) {
-    snprintf(b, sizeof b, "%d", (int)lroundf(pc.cpu));
-    uiSetText(lblCpu, b);
-    String h = pc.host;
-    h.toUpperCase();
-    uiSetText(lblHost, h.c_str());
-  } else {
-    uiSetText(lblCpu, "--");
-    for (StatCol* c : {&colGpu, &colRam, &colTemp}) {
-      uiSetText(c->val, "--");
-      lv_bar_set_value(c->bar, 0, LV_ANIM_OFF);
-    }
-    uiSetText(lblHost, WiFi.isConnected() ? "ESPERANDO AL PC" : "SIN WIFI");
-  }
-}
+static void tickMonitor() {}
 
 // ================================================================= info
 static void sliderCb(lv_event_t* e) {
@@ -388,6 +350,10 @@ void uiDebug(const char* cmd) {
     int p = atoi(cmd + 4);
     if (p >= 0) uiOtaProgress(p);
     else otaLastMs = 0, otaWatchdog();
+  } else if (!strncmp(cmd, "anim ", 5)) {  // play eye animation N (0-based)
+    forceEye = true;
+    eyeShow();
+    eyePlay(atoi(cmd + 5));
   } else if (!strcmp(cmd, "alert")) {
     alertDebug();
   } else if (!strcmp(cmd, "alertmap")) {
