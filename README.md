@@ -97,7 +97,14 @@ pip install -r agent/requirements.txt
 powershell -ExecutionPolicy Bypass -File agent/install_autostart.ps1
 ```
 
-This runs the agent hidden at every login 🔁. To remove it: `install_autostart.ps1 -Uninstall`. Logs go to `agent/agent.log`. 📝
+This runs the agent at every login 🔁. It lives in the **system tray** as a little DeskBuddy icon, which turns blue when connected. Right-click it to:
+
+- 🌐 Open DeskBuddy's web page
+- 📝 View the log
+- 🔁 Toggle *Start with Windows*
+- ❌ Quit
+
+To remove autostart from the command line: `install_autostart.ps1 -Uninstall`.
 
 ## 👩‍💻 Development
 

@@ -14,6 +14,7 @@ import datetime as dt
 import io
 import json
 import logging
+import os
 import queue
 import socket
 import struct
@@ -40,7 +41,15 @@ log = logging.getLogger("deskbuddy")
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-sock.bind(("", PORT_AGENT))  # one socket for send + receive -> replies pass the firewall
+try:
+    sock.bind(("", PORT_AGENT))  # one socket for send + receive -> replies pass the firewall
+except OSError:
+    log.info("another agent is already running, exiting")
+    raise SystemExit(0)
+
+STARTUP_LNK = Path(os.environ.get("APPDATA", "")) / \
+    "Microsoft/Windows/Start Menu/Programs/Startup/DeskBuddy Agent.lnk"
+children: list[subprocess.Popen] = []
 
 device_ip: str | None = None
 gpu = {"gpu": 0.0, "gt": 0.0, "vram": 0.0}
@@ -90,6 +99,7 @@ def gpu_reader() -> None:
     while True:
         try:
             p = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True, creationflags=NO_WINDOW)
+            children.append(p)
             for line in p.stdout:
                 parts = [x.strip() for x in line.split(",")]
                 if len(parts) == 4:
@@ -340,10 +350,7 @@ def resolve_mdns() -> None:
         time.sleep(10)
 
 
-def main() -> None:
-    log.info("agent starting on %s", HOSTNAME)
-    for fn in (gpu_reader, audio_worker, media_thread, receiver, resolve_mdns):
-        threading.Thread(target=fn, daemon=True, name=fn.__name__).start()
+def sender() -> None:
     psutil.cpu_percent(None)
     tick = 0
     while True:
@@ -357,6 +364,85 @@ def main() -> None:
             send({"t": "stats", "host": HOSTNAME, "idle": idle_seconds(),
                   "cpu": round(psutil.cpu_percent(None), 1),
                   "ram": round(psutil.virtual_memory().percent, 1), **gpu})
+
+
+# ------------------------------------------------------------------ tray icon
+def tray_image(connected: bool) -> Image.Image:
+    """A little round DeskBuddy: dark face, accent ring, two eyes."""
+    from PIL import ImageDraw
+    s = 64
+    im = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    ring = (90, 200, 250) if connected else (110, 116, 128)
+    d.ellipse((2, 2, s - 3, s - 3), fill=(12, 14, 18), outline=ring, width=5)
+    for x in (20, 36):
+        d.rounded_rectangle((x, 21, x + 9, 41), radius=4, fill=ring)
+    return im
+
+
+def run_tray() -> None:
+    import webbrowser
+    import pystray
+
+    def status_text(_item) -> str:
+        return f"Conectado a {device_ip}" if device_ip else "Buscando DeskBuddy..."
+
+    def open_web(_icon, _item) -> None:
+        webbrowser.open(f"http://{device_ip or 'deskbuddy.local'}/")
+
+    def open_log(_icon, _item) -> None:
+        os.startfile(Path(__file__).with_name("agent.log"))
+
+    def autostart_on(_item) -> bool:
+        return STARTUP_LNK.exists()
+
+    def toggle_autostart(_icon, _item) -> None:
+        if STARTUP_LNK.exists():
+            STARTUP_LNK.unlink()
+        else:
+            script = Path(__file__).with_name("install_autostart.ps1")
+            subprocess.run(["powershell", "-ExecutionPolicy", "Bypass", "-File", str(script),
+                            "-NoStart"], creationflags=NO_WINDOW)
+
+    def quit_app(icon, _item) -> None:
+        log.info("quit from tray")
+        for p in children:
+            p.kill()
+        icon.stop()
+
+    icon = pystray.Icon("DeskBuddy", tray_image(False), "DeskBuddy", menu=pystray.Menu(
+        pystray.MenuItem(status_text, None, enabled=False),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("Abrir panel web", open_web, default=True),
+        pystray.MenuItem("Ver log", open_log),
+        pystray.MenuItem("Iniciar con Windows", toggle_autostart, checked=autostart_on),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("Salir", quit_app),
+    ))
+
+    def watch(icon) -> None:  # keep icon + tooltip in sync with the connection
+        icon.visible = True
+        shown = None
+        while True:
+            if device_ip != shown:
+                shown = device_ip
+                icon.icon = tray_image(bool(shown))
+                icon.title = f"DeskBuddy - {status_text(None)}"
+                icon.update_menu()
+            time.sleep(2)
+
+    icon.run(setup=lambda i: threading.Thread(target=watch, args=(i,), daemon=True).start())
+
+
+def main() -> None:
+    log.info("agent starting on %s", HOSTNAME)
+    for fn in (gpu_reader, audio_worker, media_thread, receiver, resolve_mdns, sender):
+        threading.Thread(target=fn, daemon=True, name=fn.__name__).start()
+    try:
+        run_tray()  # blocks until "Salir"
+    except Exception as e:  # no tray available -> keep running headless
+        log.warning("tray: %s", e)
+        threading.Event().wait()
 
 
 if __name__ == "__main__":

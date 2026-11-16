@@ -1,6 +1,6 @@
 # Installs (or removes with -Uninstall) a Startup-folder shortcut that runs the
 # DeskBuddy agent silently (pythonw = no console window) when you log in.
-param([switch]$Uninstall)
+param([switch]$Uninstall, [switch]$NoStart)
 
 $lnkPath = Join-Path ([Environment]::GetFolderPath('Startup')) 'DeskBuddy Agent.lnk'
 $script  = Join-Path $PSScriptRoot 'deskbuddy_agent.py'
@@ -20,6 +20,7 @@ $lnk.WorkingDirectory = $PSScriptRoot
 $lnk.Description = 'DeskBuddy PC agent'
 $lnk.Save()
 Write-Host "DeskBuddy autostart installed -> $lnkPath"
+if ($NoStart) { return }
 
 # start it now (kill any previous instance first)
 Get-CimInstance Win32_Process -Filter "Name='pythonw.exe' OR Name='python.exe'" |
