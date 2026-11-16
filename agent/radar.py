@@ -91,7 +91,7 @@ def clean_model(name: str) -> str:
     name = re.sub(r"/W\b", "", name or "").strip()
     name = re.sub(r"\b(7[0-9]7)NG (\d)[A-Z0-9]{2}\b", r"\1-\g<2>00", name)   # Boeing customer codes
     name = re.sub(r"\b(7[0-9]7) (\d)[A-Z0-9]{2}\b", r"\1-\g<2>00", name)
-    name = re.sub(r"\b(A3[0-9]{2}(?:neo|NEO)?)[ -]\d{3}[A-Z]?\b", r"\1", name)  # Airbus engine/series
+    name = re.sub(r"\b(A3[0-9]{2}(?:neo|NEO)?)[ -]\d{3}[A-Z]*\b", r"\1", name)  # Airbus engine/series
     return re.sub(r"\s+", " ", name).strip()
 
 
@@ -111,14 +111,46 @@ class Routes:
         self.airports: dict[str, dict | None] = {}
         self.models: dict[str, str] = {}
 
+    _ourairports: dict | None = None
+
+    @classmethod
+    def _cities(cls) -> dict:
+        """ICAO -> (city, lat, lon, iata) from OurAirports (public domain), downloaded once."""
+        if cls._ourairports is None:
+            import csv
+            import io
+            import re
+            path = DATA / "airports.csv"
+            try:
+                if not path.exists():
+                    DATA.mkdir(exist_ok=True)
+                    req = urllib.request.Request(
+                        "https://davidmegginson.github.io/ourairports-data/airports.csv", headers=UA)
+                    path.write_bytes(urllib.request.urlopen(req, timeout=90).read())
+                rows = csv.DictReader(io.StringIO(path.read_text(encoding="utf-8")))
+                # "Oslo (Gardermoen)" -> "Oslo"
+                cls._ourairports = {r["ident"]: (re.sub(r"\s*\(.*?\)", "", r["municipality"]).strip(),
+                                                 float(r["latitude_deg"]),
+                                                 float(r["longitude_deg"]), r["iata_code"])
+                                    for r in rows if r["type"] != "closed"}
+            except Exception:
+                cls._ourairports = {}
+        return cls._ourairports
+
     def airport(self, icao: str) -> dict | None:
         if icao not in self.airports:
-            try:
-                a = http_json(f"https://hexdb.io/api/v1/airport/icao/{icao}", 10)
-                self.airports[icao] = {"iata": a.get("iata") or icao, "lat": a["latitude"],
-                                       "lon": a["longitude"]}
-            except Exception:
-                self.airports[icao] = None
+            hit = self._cities().get(icao)
+            if hit:
+                city, lat, lon, iata = hit
+                self.airports[icao] = {"icao": icao, "iata": iata or icao, "city": city,
+                                       "lat": lat, "lon": lon}
+            else:
+                try:
+                    a = http_json(f"https://hexdb.io/api/v1/airport/icao/{icao}", 10)
+                    self.airports[icao] = {"icao": icao, "iata": a.get("iata") or icao, "city": "",
+                                           "lat": a["latitude"], "lon": a["longitude"]}
+                except Exception:
+                    self.airports[icao] = None
         return self.airports[icao]
 
     def model(self, hexid: str, budget: list | None = None) -> str:
@@ -163,8 +195,13 @@ class Routes:
         self.routes[cs] = (o, d, time.time())
         return o, d
 
+    @staticmethod
+    def _label(a: dict) -> str:
+        return f"{a['icao']} {a['city']}".strip() if a.get("city") else a["icao"]
+
     def text(self, o, d) -> str:
-        return f"{o['iata']} → {d['iata']}" if o and d else ""
+        """'LEMG Málaga → EYKA Kaunas'"""
+        return f"{self._label(o)} → {self._label(d)}" if o and d else ""
 
 
 # ------------------------------------------------------------------ world map
@@ -358,7 +395,7 @@ class Radar:
             out.append({"c": cs[:9], "ty": (a.get("t") or "")[:7], "x": round(x, 2), "y": round(y, 2),
                         "al": int((alt or 0) * 0.3048), "s": int((a.get("gs") or 0) * 1.852),
                         "h": int(a.get("track") or a.get("true_heading") or 0),
-                        "rt": self.routes.text(o, dd)[:23], "md": model[:31]})
+                        "rt": self.routes.text(o, dd)[:47], "md": model[:31]})
         return {"t": "radar", "on": 1, "r": radius, "auto": bool(rc.get("auto_show", True)), "ac": out}
 
     # -- spotlight
@@ -439,9 +476,9 @@ class Radar:
                "dt": f"{thousands(int(alt * 0.3048))} m · {int((a.get('gs') or 0) * 1.852)} km/h",
                "p": list(p)}
         if "o" in marks:
-            msg["o"] = [*marks["o"], o["iata"][:5]]
+            msg["o"] = [*marks["o"], o["icao"][:5]]
         if "d" in marks:
-            msg["d"] = [*marks["d"], d["iata"][:5]]
+            msg["d"] = [*marks["d"], d["icao"][:5]]
         for _ in range(3):
             self.send(msg)
             time.sleep(0.3)

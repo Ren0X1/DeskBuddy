@@ -17,7 +17,7 @@
 
 // ================================================================= data
 struct Plane {
-  char cs[10], type[8], route[24], model[32];
+  char cs[10], type[8], route[48], model[32];
   float x, y;  // km east / north of home
   int alt, spd, hdg;
   float glow;
@@ -31,7 +31,7 @@ static char selCs[10] = "";
 
 struct Alert {
   uint16_t id = 0;
-  char label[32] = "", cs[12] = "", model[40] = "", route[40] = "", data[48] = "";
+  char label[32] = "", cs[12] = "", model[40] = "", route[56] = "", data[48] = "";
   int px = 120, py = 120, ox = -1, oy = -1, dx = -1, dy = -1, secs = 60;
   char o[6] = "", d[6] = "";
   bool emergency = false;
@@ -169,6 +169,7 @@ void radarBuild(lv_obj_t* t) {
   pnl1 = panelLine(b, &font_body, G_BRIGHT, 3);
   pnl4 = panelLine(b, &font_small, G_MID, 22);
   pnl2 = panelLine(b, &font_small, G_MID, 38);
+  lv_label_set_long_mode(pnl2, LV_LABEL_LONG_SCROLL_CIRCULAR);  // long ICAO routes scroll
   pnl3 = panelLine(b, &font_small, G_DIM, 54);
 
   for (int i = 0; i < MAX_PLANES; i++) {
@@ -279,7 +280,7 @@ void radarFast(uint32_t dt) {
 }
 
 void radarTick() {
-  char b[48];
+  char b[64];
   for (int i = 0; i < 3; i++) {
     int km = (int)lroundf(rangeKm * (i + 1) / 3);
     snprintf(b, sizeof b, i == 2 ? "%d KM" : "%d", km);
@@ -321,12 +322,10 @@ void radarTick() {
   uiSetText(pnl1, b);
   uiSetText(pnl4, p.model[0] ? p.model : p.type);
   float dist = sqrtf(p.x * p.x + p.y * p.y);
-  if (p.route[0]) snprintf(b, sizeof b, "%s · %.1f km", p.route, dist);
-  else snprintf(b, sizeof b, "%.1f km de casa", dist);
-  uiSetText(pnl2, b);
+  uiSetText(pnl2, p.route[0] ? p.route : "Ruta desconocida");
   char alt[12];
   fmtThousands(alt, sizeof alt, p.alt);
-  snprintf(b, sizeof b, "%s m · %d km/h", alt, p.spd);
+  snprintf(b, sizeof b, "%.1fkm · %sm · %dkm/h", dist, alt, p.spd);
   uiSetText(pnl3, b);
 }
 
@@ -387,6 +386,7 @@ void alertBuild() {
 
   lv_obj_t* b = panel(alScr, 72);
   alRoute = panelLine(b, &font_body, C_TXT, 3);
+  lv_label_set_long_mode(alRoute, LV_LABEL_LONG_SCROLL_CIRCULAR);
   alModel = panelLine(b, &font_small, C_TXT2, 22);
   alData = panelLine(b, &font_small, C_TXT3, 38);
 }
