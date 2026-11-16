@@ -8,15 +8,10 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 <p align="center">
-  <img src="docs/monitor.png" width="190" alt="PC monitor HUD">
-  <img src="docs/music.png" width="190" alt="Music">
-  <img src="docs/radar.png" width="190" alt="Plane radar">
+  <img src="docs/gif/tour.gif" width="300" alt="DeskBuddy cycling through its screens">
 </p>
-<p align="center">
-  <img src="docs/clock.png" width="190" alt="CRT clock">
-  <img src="docs/eye.png" width="190" alt="Robot eyes">
-  <img src="docs/alert.png" width="190" alt="Spotlight alert">
-</p>
+
+<p align="center"><b>🎬 <a href="https://alejandromz.es/deskbuddy/">Live demo</a></b> · <b>📦 <a href="https://github.com/Ren0X1/DeskBuddy/releases/latest">Latest release</a></b></p>
 
 Built for the cheap **ESP32-2424S012** board: an ESP32-C3 with a 1.28" 240×240 round IPS display and capacitive touch. Flashing DeskBuddy wipes the stock demo firmware. 🧹
 
@@ -27,18 +22,32 @@ Built for the cheap **ESP32-2424S012** board: an ESP32-C3 with a 1.28" 240×240 
 The whole UI is **phosphor green on black**, set in [B612 Mono](https://github.com/polarsys/b612), the font Airbus designed for cockpit displays. ✈️
 
 ### 📊 PC Monitor: combat HUD
+<img src="docs/gif/monitor.gif" width="200" align="right" alt="PC monitor">
+
 CPU and GPU run as airspeed/altitude-style tapes, a velocity vector climbs with the load, and RAM, GPU temperature, VRAM and the GPU model sit in the middle. Readouts turn 🟡 above 75% and 🔴 above 90%.
 
+<br clear="right">
+
 ### 🎵 Music: target designator
+<img src="docs/gif/music.gif" width="200" align="right" alt="Music">
+
 - 🖼️ The cover sits in a **TGT box**, tinted green like a night-vision feed
 - 🎚️ Stereo VU tapes, a scrolling title, and a range-staple progress bar
 - ⏮️ ⏯️ ⏭️ 🔉 🔊 HUD soft keys. Tap the volume to 🔇 mute
 - Works with **any** Windows media source: Spotify, YouTube, Apple Music, VLC and more
 
+<br clear="right">
+
 ### 🕒 Clock: CRT scope
+<img src="docs/gif/clock.gif" width="200" align="right" alt="CRT clock">
+
 An analog dial whose seconds hand is a **radar sweep**, with scanlines, plus digital time, date, temperature and conditions from [Open-Meteo](https://open-meteo.com) 🌦️ for **your** coordinates.
 
+<br clear="right">
+
 ### ✈️ Plane radar
+<img src="docs/gif/radar.gif" width="200" align="right" alt="Plane radar">
+
 An old-school phosphor radar 📡 of the sky around your home. Blips light up as the sweep passes and fade out slowly, and between updates they glide on dead reckoning.
 - Every aircraft within **15 km** (configurable) with callsign, type and **full model** (Boeing 737-800, Airbus A321neo…)
 - **Origin and destination on separate lines**, as ICAO code plus city: `ORG LEMG Málaga` / `DST EYKA Kaunas`
@@ -48,9 +57,11 @@ An old-school phosphor radar 📡 of the sky around your home. Blips light up as
 ### 🚨 Spotlight alerts: emergency vs. notable aircraft
 When something interesting is flying **anywhere in the world**, DeskBuddy takes over the screen for a minute 🌍. You get a world map with the route flown (solid line), the way ahead (dashed), the departure and arrival airports and the aircraft pulsing behind the radar sweep. There are two kinds:
 
+<br clear="right">
+
 <p align="center">
-  <img src="docs/alert.png" width="220" alt="Emergency alert">
-  <img src="docs/alert_notable.png" width="220" alt="Notable aircraft alert">
+  <img src="docs/gif/alert.gif" width="220" alt="Emergency alert">
+  <img src="docs/gif/notable.gif" width="220" alt="Notable aircraft alert">
 </p>
 
 | | 🔴 **EMERGENCIA** | 🟠 **AERONAVE DESTACADA** |
@@ -64,9 +75,20 @@ When something interesting is flying **anywhere in the world**, DeskBuddy takes 
 Each aircraft is shown once and then rests for 2 hours. You can edit the watch list, the duration and the cooldown in the web panel.
 
 ### 👀 Robot eyes: 84 animations
+<img src="docs/gif/eyes.gif" width="200" align="right" alt="Robot eyes">
+
 Leave the PC alone and DeskBuddy comes alive 🤖 with **84 animations** and 40 effects. Blinks, glances, winks, moods (happy, angry, sad, suspicious, sleepy…), hearts, stars, dizzy spirals, tears, a radar sweep, target lock, matrix rain, a countdown, sonar and hypnosis. Tap for something happy 😊, long-press to dismiss. At night it dozes off 😴, and it notices when a plane flies over.
 
 All animations are defined once in [`tools/eyes.py`](tools/eyes.py), which generates the firmware table, so the web preview and the device always match.
+
+<br clear="right">
+
+### 📸 Real hardware
+Straight from the device's framebuffer over USB:
+
+<p align="center">
+  <img src="docs/monitor.png" width="120"> <img src="docs/music.png" width="120"> <img src="docs/radar.png" width="120"> <img src="docs/alert.png" width="120"> <img src="docs/clock.png" width="120"> <img src="docs/eye.png" width="120">
+</p>
 
 ### ⚙️ Web control panel
 Open **http://deskbuddy.local** for a HUD-styled control panel:
