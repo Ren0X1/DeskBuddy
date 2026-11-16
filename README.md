@@ -1,21 +1,21 @@
 # 🖥️ DeskBuddy
 
-> A tiny round desk companion for your PC 🤖: live hardware stats, a music remote with album art, a clock with weather, a ✈️ **plane radar** of the sky above your home, and a pair of eyes that keep you company. Everything runs over **Wi-Fi** 🛜, so the only cable is for power.
+> A tiny round desk companion for your PC, styled like a fighter-jet HUD 🛩️. It shows live hardware stats, works as a music remote, keeps the time and weather, runs a ✈️ **plane radar** of the sky above your home, and puts a pair of robot eyes 👀 on your desk. Everything runs over **Wi-Fi** 🛜, so the only cable is for power.
 
 [![Build](https://github.com/Ren0X1/DeskBuddy/actions/workflows/build.yml/badge.svg)](https://github.com/Ren0X1/DeskBuddy/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/Ren0X1/DeskBuddy?logo=github)](https://github.com/Ren0X1/DeskBuddy/releases/latest)
-![ESP32-C3](https://img.shields.io/badge/ESP32--C3-LVGL%208-5AC8FA)
+![ESP32-C3](https://img.shields.io/badge/ESP32--C3-LVGL%208-39FF88)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 <p align="center">
-  <img src="docs/monitor.png" width="190" alt="PC monitor">
-  <img src="docs/music.png" width="190" alt="Music player">
+  <img src="docs/monitor.png" width="190" alt="PC monitor HUD">
+  <img src="docs/music.png" width="190" alt="Music">
   <img src="docs/radar.png" width="190" alt="Plane radar">
-  <img src="docs/alert.png" width="190" alt="Spotlight alert">
 </p>
 <p align="center">
-  <img src="docs/clock.png" width="190" alt="Clock and weather">
-  <img src="docs/eye.png" width="190" alt="Idle eyes">
+  <img src="docs/clock.png" width="190" alt="CRT clock">
+  <img src="docs/eye.png" width="190" alt="Robot eyes">
+  <img src="docs/alert.png" width="190" alt="Spotlight alert">
 </p>
 
 Built for the cheap **ESP32-2424S012** board: an ESP32-C3 with a 1.28" 240×240 round IPS display and capacitive touch. Flashing DeskBuddy wipes the stock demo firmware. 🧹
@@ -24,77 +24,62 @@ Built for the cheap **ESP32-2424S012** board: an ESP32-C3 with a 1.28" 240×240 
 
 ## ✨ Features
 
-### 📊 PC Monitor
-A tachometer-style CPU gauge with a red zone, plus GPU load, RAM and GPU temperature underneath. Ticks turn 🟡 above 75% and 🔴 above 90%.
+The whole UI is **phosphor green on black**, set in [B612 Mono](https://github.com/polarsys/b612), the font Airbus designed for cockpit displays. ✈️
 
-### 🎵 Music
-- 🖼️ **Album art** and an accent color pulled from the cover, the way Apple Music does it
-- 🎚️ Stereo VU meters, a progress ring, title and artist (with full **á é ñ ü** support)
-- ⏮️ ⏯️ ⏭️ Media controls and 🔉🔊 volume. Tap the volume to 🔇 mute
+### 📊 PC Monitor: combat HUD
+CPU and GPU run as airspeed/altitude-style tapes, a velocity vector climbs with the load, and RAM, GPU temperature, VRAM and the GPU model sit in the middle. Readouts turn 🟡 above 75% and 🔴 above 90%.
+
+### 🎵 Music: target designator
+- 🖼️ The cover sits in a **TGT box**, tinted green like a night-vision feed
+- 🎚️ Stereo VU tapes, a scrolling title, and a range-staple progress bar
+- ⏮️ ⏯️ ⏭️ 🔉 🔊 HUD soft keys. Tap the volume to 🔇 mute
 - Works with **any** Windows media source: Spotify, YouTube, Apple Music, VLC and more
-- Jumps to this screen automatically when a song starts
 
-### ✈️ Plane Radar
-An old-school green phosphor radar 📡 of the sky around your home. Blips light up as the sweep passes and fade out slowly, just like the real thing.
-- Shows every aircraft within **15 km** (configurable) with callsign, type, route (**MAD → BCN**), distance, altitude and speed
-- Positions are dead-reckoned between updates, so the blips glide smoothly
-- Tap to cycle through the aircraft
+### 🕒 Clock: CRT scope
+An analog dial whose seconds hand is a **radar sweep**, with scanlines, plus digital time, date, temperature and conditions from [Open-Meteo](https://open-meteo.com) 🌦️ for **your** coordinates.
+
+### ✈️ Plane radar
+An old-school phosphor radar 📡 of the sky around your home. Blips light up as the sweep passes and fade out slowly, and between updates they glide on dead reckoning.
+- Every aircraft within **15 km** (configurable) with callsign, type and **full model** (Boeing 737-800, Airbus A321neo…)
+- **Origin and destination on separate lines**, as ICAO code plus city: `ORG LEMG Málaga` / `DST EYKA Kaunas`
+- Distance, altitude and speed. Tap to cycle through the aircraft
 - Jumps to the radar when a new plane enters your airspace
 
 ### 🚨 Spotlight alerts
-When something interesting is flying **anywhere in the world**, DeskBuddy shows it full-screen for a minute 🌍. You get a world map with the route flown (solid), the way to the destination (dashed) and a pulsing plane, all behind the radar sweep:
-- 🆘 **Emergencies**: squawk 7700 (emergency), 7600 (radio failure) and 7500 (hijack). These are the flights that usually top the "most tracked" lists
-- ⭐ **Notable aircraft**: Air Force One, Airbus Beluga, Boeing Dreamlifter, An-124... Add your own callsigns and types
+When something interesting is flying **anywhere in the world**, DeskBuddy shows it full-screen for a minute 🌍. You get a world map with the route flown and the way ahead, all behind the radar sweep.
+- 🆘 **Emergencies**: squawk 7700, 7600 and 7500. These are the flights that top "most tracked" lists
+- ⭐ **Notable aircraft**: Air Force One, Airbus Beluga, Boeing Dreamlifter, An-124… Add your own
 
-Both modes are toggled from the tray icon and set up in `agent/config.json`:
+### 👀 Robot eyes: 84 animations
+Leave the PC alone and DeskBuddy comes alive 🤖 with **84 animations** and 40 effects. Blinks, glances, winks, moods (happy, angry, sad, suspicious, sleepy…), hearts, stars, dizzy spirals, tears, a radar sweep, target lock, matrix rain, a countdown, sonar and hypnosis. Tap for something happy 😊, long-press to dismiss. At night it dozes off 😴, and it notices when a plane flies over.
 
-```json
-{
-  "home": { "lat": 40.4168, "lon": -3.7038 },
-  "radar": { "enabled": true, "radius_km": 15 },
-  "spotlight": { "enabled": true, "show_seconds": 60, "watch_types": ["A337", "BLCF"] }
-}
-```
+All animations are defined once in [`tools/eyes.py`](tools/eyes.py), which generates the firmware table, so the web preview and the device always match.
 
-Data: [adsb.lol](https://adsb.lol) (open ADS-B, ODbL) · [hexdb.io](https://hexdb.io) (routes) · [Natural Earth](https://www.naturalearthdata.com) (map). No API keys. 🔓
+### ⚙️ Web control panel
+Open **http://deskbuddy.local** for a HUD-styled control panel:
+- 📍 **Location**: search your town or type coordinates. Used for the radar and the weather
+- ✈️ Radar on/off, radius and auto-jump
+- 🚨 Alerts on/off, duration, and which callsigns and aircraft types to watch
+- 🌙 Brightness, night hours and night brightness, when the eyes appear and when they fall asleep
+- 🔧 Firmware update, reboot, change Wi-Fi
 
-### 🕒 Clock & Weather
-NTP time with a sweeping seconds dial. Current weather, the day's min/max and your city from [Open-Meteo](https://open-meteo.com) 🌦️, no API key needed.
+DeskBuddy keeps the settings and syncs them to the PC app on its own.
 
-### 👀 Idle Eyes
-Leave the PC alone for 2 minutes and DeskBuddy wakes up 🤖. It blinks, looks around and smiles when you tap it 😊. After 15 minutes, or at night, it dozes off 😴. Long-press to dismiss.
-
-### 🌙 Night mode & auto-sleep
-- Brightness is capped from 23:00 to 08:00
-- When the PC sleeps or shuts down, DeskBuddy shows the clock and dims. At night the screen switches off completely
-- A touch wakes it up 👆
-
-### 📶 Wi-Fi updates (OTA)
-After the first USB flash, every update goes over Wi-Fi, with a progress ring on screen.
-
-### 📱 Wi-Fi setup portal
-On first boot DeskBuddy creates a **DeskBuddy-Setup** hotspot. Join it from your phone, pick your network, done.
-
-<p align="center">
-  <img src="docs/info.png" width="160" alt="Info">
-  <img src="docs/sleepy.png" width="160" alt="Sleepy">
-  <img src="docs/ota.png" width="160" alt="OTA update">
-  <img src="docs/portal.png" width="160" alt="Setup portal">
-</p>
+### 🌙 Night mode & auto-sleep · 📶 OTA updates · 📱 Wi-Fi setup portal
+Brightness drops at night, and when the PC sleeps DeskBuddy parks on the clock (the screen goes off at night). After the first USB flash, every update goes over Wi-Fi. On first boot a **DeskBuddy-Setup** hotspot lets you pick your network from your phone.
 
 ## 🧩 How it works
 
 ```
-┌──────────── PC (Windows) ─────────────┐        Wi-Fi / UDP         ┌──── DeskBuddy ────┐
-│ deskbuddy_agent.py                    │ ── stats   (1 Hz) ───────▶ │ :4210             │
-│  • psutil + nvidia-smi → CPU/GPU/RAM  │ ── media   (2 Hz) ───────▶ │ LVGL 8 UI         │
-│  • Windows SMTC → now playing + art   │ ── art     (on change) ──▶ │                   │
-│  • Core Audio → volume + peak meter   │ ── vu      (25 Hz) ──────▶ │                   │
-│  • GetLastInputInfo → idle time       │ ◀──────── cmd (buttons) ── │ touch             │
-└───────────────────────────────────────┘           :4211            └───────────────────┘
+┌──────────── PC: DeskBuddy.exe ─────────┐        Wi-Fi / UDP          ┌──── DeskBuddy ────┐
+│  • CPU/GPU/RAM (psutil + nvidia-smi)    │ ── stats / media / vu ────▶ │ :4210             │
+│  • Now playing + cover (Windows SMTC)   │ ── cover art, world map ──▶ │ LVGL 8 HUD        │
+│  • Volume + peak meter (Core Audio)     │ ── radar / alerts ────────▶ │                   │
+│  • Planes (adsb.lol, hexdb, OurAirports)│ ◀──────── buttons, cfg ──── │ web panel :80     │
+└─────────────────────────────────────────┘           :4211             └───────────────────┘
 ```
 
-The agent finds DeskBuddy through mDNS (`deskbuddy.local`) or its UDP hello broadcast. Nothing to configure on the PC. ✨
+The PC app finds DeskBuddy by itself via mDNS (`deskbuddy.local`). Plane data comes from [adsb.lol](https://adsb.lol) (open ADS-B, ODbL), with routes from [hexdb.io](https://hexdb.io), cities from [OurAirports](https://ourairports.com) and the map from [Natural Earth](https://www.naturalearthdata.com). No API keys needed. 🔓
 
 ## 🛠️ Hardware
 
@@ -102,13 +87,11 @@ The agent finds DeskBuddy through mDNS (`deskbuddy.local`) or its UDP hello broa
 |---|---|
 | 🖼️ GC9A01 display (SPI) | SCLK 6 · MOSI 7 · DC 2 · CS 10 · BL 3 |
 | 👆 CST816D touch (I²C `0x15`) | SDA 4 · SCL 5 · RST 1 |
-| 🔌 USB | Native USB-Serial/JTAG |
+| 🔋 Battery | The IP5306 charger has no fuel-gauge output, and every ADC-capable GPIO is taken, so DeskBuddy can't read the charge level without an extra I²C gauge such as a MAX17048 |
 
 ## 🚀 Quick start
 
-### 1️⃣ Flash the firmware (first time, USB)
-
-Grab `deskbuddy-vX.Y.Z-full.bin` from the [latest release](https://github.com/Ren0X1/DeskBuddy/releases/latest) 📦 and run:
+1️⃣ **Flash the firmware once over USB.** Grab `deskbuddy-vX.Y.Z-full.bin` from the [latest release](https://github.com/Ren0X1/DeskBuddy/releases/latest) 📦:
 
 ```bash
 pip install esptool
@@ -116,23 +99,11 @@ python -m esptool --chip esp32c3 --port COM3 erase-flash
 python -m esptool --chip esp32c3 --port COM3 write-flash 0x0 deskbuddy-vX.Y.Z-full.bin
 ```
 
-Then connect your phone to **DeskBuddy-Setup** 📱 and choose your Wi-Fi.
+2️⃣ **Connect it to Wi-Fi.** Join **DeskBuddy-Setup** from your phone and pick your network. 📱
 
-### 2️⃣ Install the PC agent (Windows)
+3️⃣ **Run `DeskBuddy-vX.Y.Z.exe` on Windows.** It sits in the system tray as a little green radar and starts with Windows. Right-click it for the control panel, the radar and alert toggles, the log, autostart and quit. 🖥️
 
-```powershell
-pip install -r agent/requirements.txt
-powershell -ExecutionPolicy Bypass -File agent/install_autostart.ps1
-```
-
-This runs the agent at every login 🔁. It lives in the **system tray** as a little DeskBuddy icon, which turns blue when connected. Right-click it to:
-
-- 🌐 Open DeskBuddy's web page
-- 📝 View the log
-- 🔁 Toggle *Start with Windows*
-- ❌ Quit
-
-To remove autostart from the command line: `install_autostart.ps1 -Uninstall`.
+4️⃣ **Set your location.** Open **http://deskbuddy.local** and search for your town. 📍
 
 ## 👩‍💻 Development
 
@@ -141,59 +112,60 @@ cd firmware
 cp include/secrets.example.h include/secrets.h   # 🔑 optional: bake in Wi-Fi + OTA password
 cp secrets.example.ini secrets.ini               # 🔑 OTA host/password for uploads
 pio run -e usb -t upload    # 🔌 over USB
-pio run -e ota -t upload    # 📶 over Wi-Fi
+pio run -e ota -t upload    # 📶 over Wi-Fi (retries automatically)
 ```
+
+PC app from source: `pip install -r agent/requirements.txt` then `python agent/deskbuddy_agent.py`. Build the .exe with `python agent/build_exe.py`.
 
 | Tool | What it does |
 |---|---|
-| `tools/fontgen.py` | 🔤 Turns Inter + Material Icons into LVGL fonts (Latin-1 + icons, no Node needed) |
-| `tools/screenshot.py` | 📸 Dumps the live screen over USB: `python tools/screenshot.py --tile 0 1 2 3` |
+| `tools/eyes.py` | 👀 Eye animation catalogue, generates `firmware/src/eye_anims.h` |
+| `tools/fontgen.py` | 🔤 B612 Mono + Material Icons into LVGL fonts (no Node needed) |
+| `tools/screenshot.py` | 📸 Dumps the live screen over USB |
+| `tools/demo.py` | 🎬 Flyover and spotlight demo on a real device |
+| `tools/ota_upload.py` | 📶 Wi-Fi firmware upload with retries |
 
-Serial console commands: `shot` · `tile N` · `eye` · `sleepy` · `alert` · `alertmap` · `ota N` · `portal` · `mem` · `fps` · `wifireset`
-
-Tweak night hours, idle timers, timezone or a fixed weather location in [`firmware/include/config.h`](firmware/include/config.h). ⚙️
+Serial console: `shot` · `tile N` · `anim N` · `eye` · `sleepy` · `alert` · `alertmap` · `ota N` · `portal` · `mem` · `fps` · `i2cscan` · `wifireset`
 
 ### 🏷️ Releasing
 
 ```bash
-git tag v2.0.0 && git push origin v2.0.0
+git tag v3.0.0 && git push origin v3.0.0
 ```
 
-GitHub Actions builds everything and publishes a release with the full image, the OTA image and the agent zip. 🤖
+GitHub Actions builds the firmware images and **DeskBuddy.exe**, then publishes them all in one release. 🤖
 
 ## 🗂️ Project layout
 
 ```
 DeskBuddy/
-├── firmware/              🔧 PlatformIO project (Arduino + LVGL 8 + LovyanGFX)
-│   ├── include/           ⚙️ config.h, lv_conf.h, secrets
-│   └── src/
-│       ├── hw.cpp         🖼️ display, touch, backlight
-│       ├── net.cpp        📶 Wi-Fi, portal, UDP, OTA, weather
-│       ├── ui_main.cpp    🧭 tiles, clock, monitor, info, policy
-│       ├── ui_music.cpp   🎵 player
-│       ├── ui_eye.cpp     👀 idle eyes
-│       └── fonts/         🔤 generated fonts
-├── agent/                 🐍 Windows PC agent
-├── tools/                 🧰 fontgen + screenshot
-└── .github/workflows/     🤖 CI + releases
+├── firmware/src/
+│   ├── hud.cpp          🖊️ immediate-mode HUD drawing
+│   ├── ui_main.cpp      🧭 tiles, CRT clock, HUD monitor, info, screen policy
+│   ├── ui_music.cpp     🎵 target-designator player
+│   ├── ui_radar.cpp     ✈️ radar + spotlight alerts
+│   ├── ui_eye.cpp       👀 eye engine (eye_anims.h is generated)
+│   ├── net.cpp          📶 Wi-Fi, portal, UDP, OTA, weather, web API
+│   ├── settings.cpp     ⚙️ settings in NVS
+│   └── webpanel.h       🌐 control panel page
+├── agent/               🐍 PC app (tray, stats, media, radar) + build_exe.py
+├── tools/               🧰 generators, screenshot, demo, OTA
+└── .github/workflows/   🤖 CI + releases
 ```
 
 ## 🗺️ Roadmap
 
-- [x] 📶 OTA updates over Wi-Fi
-- [x] 🖼️ Album art
-- [x] 👀 Idle eyes
-- [x] 🌙 Night mode & auto-sleep
-- [x] 🌦️ Weather
-- [x] 🔤 Accents (á é ñ)
+- [x] 📶 OTA updates · 🖼️ album art · 🌦️ weather · 🔤 accents
+- [x] ✈️ Plane radar + spotlight alerts with ICAO routes
+- [x] 🛩️ Military HUD redesign · 👀 84 eye animations
+- [x] ⚙️ Web control panel · 🖥️ Windows .exe
+- [ ] 🔋 Battery gauge (needs a MAX17048 add-on)
 - [ ] 🎙️ Mic mute toggle for Discord/calls
-- [ ] 🐧 Linux / macOS agent
-- [ ] 🌐 Web flasher
+- [ ] 🐧 Linux / macOS app
 
 ## 🙏 Credits
 
-[LVGL](https://lvgl.io) · [LovyanGFX](https://github.com/lovyan03/LovyanGFX) · [Inter](https://rsms.me/inter/) (OFL) · [Material Icons](https://fonts.google.com/icons) (Apache 2.0) · [Open-Meteo](https://open-meteo.com)
+[LVGL](https://lvgl.io) · [LovyanGFX](https://github.com/lovyan03/LovyanGFX) · [B612](https://github.com/polarsys/b612) (OFL) · [Material Icons](https://fonts.google.com/icons) (Apache 2.0) · [Open-Meteo](https://open-meteo.com) · [adsb.lol](https://adsb.lol) · [hexdb.io](https://hexdb.io) · [OurAirports](https://ourairports.com) · [Natural Earth](https://www.naturalearthdata.com)
 
 ## 📜 License
 

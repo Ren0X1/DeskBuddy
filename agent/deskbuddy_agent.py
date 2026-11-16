@@ -18,6 +18,7 @@ import os
 import queue
 import socket
 import struct
+import sys
 import subprocess
 import threading
 import time
@@ -34,8 +35,11 @@ ART_CHUNK = 1280
 HOSTNAME = socket.gethostname()
 NO_WINDOW = 0x08000000
 
+from radar import APP_DIR, FROZEN  # noqa: E402  (data dir: next to the script, or %LOCALAPPDATA% for the .exe)
+
+LOG_FILE = APP_DIR / "agent.log"
 logging.basicConfig(
-    filename=Path(__file__).with_name("agent.log"), level=logging.INFO,
+    filename=LOG_FILE, level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("deskbuddy")
 
@@ -331,7 +335,7 @@ def receiver() -> None:
     global device_ip
     while True:
         try:
-            data, addr = sock.recvfrom(512)
+            data, addr = sock.recvfrom(2048)
             msg = json.loads(data)
         except (OSError, ValueError):
             continue
@@ -340,6 +344,8 @@ def receiver() -> None:
             device_ip = addr[0]
             log.info("DeskBuddy at %s", device_ip)
             art["dirty"] = True  # (re)connected -> resend the cover
+        if msg.get("t") == "cfg" and radar_obj:
+            radar_obj.apply_device(msg)
         if msg.get("t") == "cmd":
             c = msg.get("c")
             log.info("button: %s", c)
@@ -416,7 +422,7 @@ def run_tray(radar) -> None:
         webbrowser.open(f"http://{device_ip or 'deskbuddy.local'}/")
 
     def open_log(_icon, _item) -> None:
-        os.startfile(Path(__file__).with_name("agent.log"))
+        os.startfile(LOG_FILE)
 
     def autostart_on(_item) -> bool:
         return STARTUP_LNK.exists()
@@ -425,9 +431,11 @@ def run_tray(radar) -> None:
         if STARTUP_LNK.exists():
             STARTUP_LNK.unlink()
         else:
-            script = Path(__file__).with_name("install_autostart.ps1")
-            subprocess.run(["powershell", "-ExecutionPolicy", "Bypass", "-File", str(script),
-                            "-NoStart"], creationflags=NO_WINDOW)
+            make_autostart()
+
+    def toggle_mode(mode: str) -> None:
+        radar.toggle(mode)  # local copy right away...
+        send({"t": "set", mode: {"enabled": radar.enabled(mode)}})  # ...and DeskBuddy keeps it
 
     def quit_app(icon, _item) -> None:
         log.info("quit from tray")
@@ -438,15 +446,13 @@ def run_tray(radar) -> None:
     icon = pystray.Icon("DeskBuddy", tray_image(False), "DeskBuddy", menu=pystray.Menu(
         pystray.MenuItem(status_text, None, enabled=False),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Abrir panel web", open_web, default=True),
+        pystray.MenuItem("Panel de control", open_web, default=True),
         pystray.MenuItem("Ver log", open_log),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Radar de aviones cercanos", lambda i, it: radar.toggle("radar"),
+        pystray.MenuItem("Radar de aviones cercanos", lambda i, it: toggle_mode("radar"),
                          checked=lambda it: radar.enabled("radar")),
-        pystray.MenuItem("Alertas de vuelos destacados", lambda i, it: radar.toggle("spotlight"),
+        pystray.MenuItem("Alertas de vuelos destacados", lambda i, it: toggle_mode("spotlight"),
                          checked=lambda it: radar.enabled("spotlight")),
-        pystray.MenuItem("Editar configuración", lambda i, it: os.startfile(radar_config_path())),
-        pystray.MenuItem("Recargar configuración", lambda i, it: radar.reload()),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Iniciar con Windows", toggle_autostart, checked=autostart_on),
         pystray.Menu.SEPARATOR,
@@ -467,9 +473,18 @@ def run_tray(radar) -> None:
     icon.run(setup=lambda i: threading.Thread(target=watch, args=(i,), daemon=True).start())
 
 
-def radar_config_path() -> Path:
-    from radar import CONFIG
-    return CONFIG
+def make_autostart() -> None:
+    """Startup-folder shortcut to this agent: DeskBuddy.exe, or pythonw + script when run from source."""
+    if FROZEN:
+        target, args, wd = sys.executable, "", str(Path(sys.executable).parent)
+    else:
+        target = str(Path(sys.executable).with_name("pythonw.exe"))
+        args, wd = f'"{Path(__file__).resolve()}"', str(Path(__file__).resolve().parent)
+    q = lambda v: v.replace("'", "''")  # noqa: E731
+    ps = (f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{q(str(STARTUP_LNK))}');"
+          f"$s.TargetPath='{q(target)}';$s.Arguments='{q(args)}';$s.WorkingDirectory='{q(wd)}';"
+          f"$s.Description='DeskBuddy';$s.Save()")
+    subprocess.run(["powershell", "-NoProfile", "-Command", ps], creationflags=NO_WINDOW)
 
 
 def main() -> None:
@@ -480,6 +495,10 @@ def main() -> None:
     for fn in (gpu_reader, audio_worker, media_thread, receiver, resolve_mdns, sender):
         threading.Thread(target=fn, daemon=True, name=fn.__name__).start()
     radar.start()
+    first = APP_DIR / ".installed"
+    if FROZEN and not first.exists():  # first launch of the .exe: start with Windows by default
+        make_autostart()
+        first.write_text("1")
     try:
         run_tray(radar)  # blocks until "Salir"
     except Exception as e:  # no tray available -> keep running headless

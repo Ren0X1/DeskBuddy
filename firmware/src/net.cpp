@@ -11,6 +11,8 @@
 #include <WiFiClientSecure.h>
 #include <WiFiUdp.h>
 #include "app.h"
+#include "settings.h"
+#include "webpanel.h"
 
 #if __has_include("secrets.h")
 #include "secrets.h"
@@ -43,22 +45,30 @@ static DNSServer dns;
 static Preferences wprefs;
 static String ssid, pass;
 static bool portalOn = false, everConnected = false, serverUp = false;
-// home location pushed by the PC agent (config.json) - beats IP geolocation
-static volatile float homeLat = NAN, homeLon = NAN;
-static volatile bool homeChanged = false;
-static char homeCity[32] = "";
+static volatile bool homeChanged = false;  // wakes the weather task
+static bool cfgDirty = true;                // push settings to the PC agent asap
+static uint32_t cfgSentAt = 0;
 
-static void onHome(JsonObject h) {
-  if (h.isNull() || !h["lat"].is<float>()) return;
-  float lat = h["lat"], lon = h["lon"];
-  if (!isnan(homeLat) && fabsf(lat - homeLat) < 0.001f && fabsf(lon - homeLon) < 0.001f) return;
-  homeLat = lat;
-  homeLon = lon;
-  strlcpy(homeCity, h["city"] | "", sizeof homeCity);
-  wprefs.putFloat("hlat", lat);
-  wprefs.putFloat("hlon", lon);
-  wprefs.putString("hcity", homeCity);
-  homeChanged = true;
+// older agents push their config.json home; only used until the panel sets one
+static void onHome(JsonVariantConst h) {
+  if (cfg.hasHome || h.isNull() || h["lat"].isNull()) return;
+  JsonDocument d;
+  d["home"].set(h);
+  if (settingsFromJson(d.as<JsonVariantConst>())) {
+    settingsSave();
+    homeChanged = cfgDirty = true;
+  }
+}
+
+static void applySettings(JsonVariantConst d) {
+  float lat = cfg.lat, lon = cfg.lon;
+  if (!d["screen"]["brightness"].isNull())
+    hwSetUserBrightness(constrain(d["screen"]["brightness"].as<int>(), 10, 255), true);
+  if (settingsFromJson(d)) {
+    settingsSave();
+    cfgDirty = true;
+    if (lat != cfg.lat || lon != cfg.lon) homeChanged = true;
+  }
 }
 
 bool pcOnline() { return pc.lastRx && millis() - pc.lastRx < 5000; }
@@ -154,6 +164,8 @@ static void handleUdp() {
       strlcpy(pc.gpuName, d["gn"] | "", sizeof pc.gpuName);
       pc.lastRx = millis();
       onHome(d["home"]);
+    } else if (!strcmp(t, "set")) {  // tray toggles from the agent
+      applySettings(d.as<JsonVariantConst>());
     } else if (!strcmp(t, "media")) {
       onMedia(d);
     } else if (!strcmp(t, "radar")) {
@@ -162,6 +174,20 @@ static void handleUdp() {
       alertOnJson(d);
     }
   }
+}
+
+static void sendCfg() {
+  if (!pcOnline() || (!cfgDirty && millis() - cfgSentAt < 10000)) return;
+  JsonDocument d;
+  d["t"] = "cfg";
+  settingsToJson(d);
+  static char buf[900];
+  size_t n = serializeJson(d, buf, sizeof buf);
+  udp.beginPacket(pcIp, pcPort);
+  udp.write((const uint8_t*)buf, n);
+  udp.endPacket();
+  cfgDirty = false;
+  cfgSentAt = millis();
 }
 
 static void sendHello() {
@@ -198,13 +224,11 @@ static const char PAGE_HEAD[] PROGMEM =
     "font-weight:600}small{color:#888}</style>";
 
 static void pageRoot() {
-  String h = FPSTR(PAGE_HEAD);
   if (!portalOn) {
-    h += "<h2>DeskBuddy " FW_VERSION "</h2><p>Wi-Fi: " + esc(ssid) + "<br>IP: " +
-         WiFi.localIP().toString() + "</p><small>Firmware updates: POST /update</small>";
-    server.send(200, "text/html", h);
+    server.send_P(200, "text/html; charset=utf-8", PANEL_HTML);
     return;
   }
+  String h = FPSTR(PAGE_HEAD);
   h += "<h2>DeskBuddy Wi-Fi</h2><form method=post action=/save><label>Network</label>"
        "<input name=s list=n required autocomplete=off><datalist id=n>";
   int n = WiFi.scanComplete();
@@ -238,12 +262,62 @@ static void pageNotFound() {
   }
 }
 
+static void apiConfigGet() {
+  JsonDocument d;
+  settingsToJson(d);
+  d["screen"]["brightness"] = hwUserBrightness();
+  String out;
+  serializeJson(d, out);
+  server.send(200, "application/json", out);
+}
+
+static void apiConfigPost() {
+  JsonDocument d;
+  if (deserializeJson(d, server.arg("plain"))) {
+    server.send(400, "text/plain", "bad json");
+    return;
+  }
+  applySettings(d.as<JsonVariantConst>());
+  apiConfigGet();
+}
+
+static void apiStatus() {
+  JsonDocument d;
+  d["fw"] = FW_VERSION;
+  d["ssid"] = ssid;
+  d["rssi"] = WiFi.RSSI();
+  d["ip"] = WiFi.localIP().toString();
+  d["pc"] = pcOnline();
+  d["host"] = pc.host;
+  uint32_t m = millis() / 60000;
+  char up[16];
+  snprintf(up, sizeof up, "%luh %02lum", m / 60, m % 60);
+  d["up"] = up;
+  d["heap"] = ESP.getFreeHeap();
+  String out;
+  serializeJson(d, out);
+  server.send(200, "application/json", out);
+}
+
 static void startServer() {
   if (serverUp) return;
   serverUp = true;
   updater.setup(&server, "/update", "deskbuddy", OTA_PASS);
   server.on("/", pageRoot);
   server.on("/save", HTTP_POST, pageSave);
+  server.on("/api/config", HTTP_GET, apiConfigGet);
+  server.on("/api/config", HTTP_POST, apiConfigPost);
+  server.on("/api/status", HTTP_GET, apiStatus);
+  server.on("/api/reboot", HTTP_POST, [] {
+    server.send(200, "text/plain", "ok");
+    delay(500);
+    ESP.restart();
+  });
+  server.on("/api/wifireset", HTTP_POST, [] {
+    server.send(200, "text/plain", "ok");
+    delay(500);
+    netResetWifi();
+  });
   server.onNotFound(pageNotFound);
   server.begin();
 }
@@ -304,11 +378,11 @@ static void weatherTask(void*) {
       vTaskDelay(pdMS_TO_TICKS(3000));
       continue;
     }
-    if (!isnan(homeLat)) {  // configured home wins over everything
-      lat = homeLat;
-      lon = homeLon;
+    if (cfg.hasHome) {  // configured home (web panel) wins over everything
+      lat = cfg.lat;
+      lon = cfg.lon;
       homeChanged = false;
-      if (homeCity[0]) strlcpy(weather.city, homeCity, sizeof weather.city);
+      if (cfg.city[0]) strlcpy(weather.city, cfg.city, sizeof weather.city);
     }
     if (isnan(lat)) {  // last resort: rough location from the public IP
       WiFiClient c;
@@ -360,11 +434,6 @@ void netInit() {
   wprefs.begin("wifi", false);
   ssid = wprefs.getString("ssid", WIFI_SSID);
   pass = wprefs.getString("pass", WIFI_PASS);
-  if (wprefs.isKey("hlat")) {  // remembered home, so the weather is right even with the PC off
-    homeLat = wprefs.getFloat("hlat");
-    homeLon = wprefs.getFloat("hlon");
-    strlcpy(homeCity, wprefs.getString("hcity", "").c_str(), sizeof homeCity);
-  }
 
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(HOSTNAME);
@@ -386,5 +455,6 @@ void netLoop() {
   if (WiFi.isConnected()) {
     handleUdp();
     sendHello();
+    sendCfg();
   }
 }

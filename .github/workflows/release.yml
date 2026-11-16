@@ -54,8 +54,8 @@ jobs:
             0x0 $B/bootloader.bin 0x8000 $B/partitions.bin 0xe000 $BOOT_APP0 0x10000 $B/firmware.bin
           # app only, for Wi-Fi (OTA) updates
           cp $B/firmware.bin dist/deskbuddy-${TAG}-ota.bin
-          # Windows PC agent
-          (cd agent && zip -r ../dist/deskbuddy-agent-${TAG}.zip deskbuddy_agent.py radar.py config.example.json requirements.txt install_autostart.ps1)
+          # Windows PC agent (source, for people who prefer running Python)
+          (cd agent && zip -r ../dist/deskbuddy-agent-${TAG}-source.zip deskbuddy_agent.py radar.py config.example.json requirements.txt install_autostart.ps1)
           ls -la dist
 
       - name: 📝 Release notes
@@ -67,7 +67,8 @@ jobs:
           |---|---|
           | \`deskbuddy-${TAG}-full.bin\` | 🔌 **First install** over USB, flash at \`0x0\` |
           | \`deskbuddy-${TAG}-ota.bin\` | 📶 **Update over Wi-Fi** (already running DeskBuddy) |
-          | \`deskbuddy-agent-${TAG}.zip\` | 🖥️ Windows PC agent |
+          | \`DeskBuddy-${TAG}.exe\` | 🖥️ **Windows PC app**: double-click, it lives in the system tray |
+          | \`deskbuddy-agent-${TAG}-source.zip\` | 🐍 Same app as Python source |
 
           ### 🔌 First install
           \`\`\`bash
@@ -76,6 +77,7 @@ jobs:
           python -m esptool --chip esp32c3 --port COM3 write-flash 0x0 deskbuddy-${TAG}-full.bin
           \`\`\`
           Then join the **DeskBuddy-Setup** Wi-Fi from your phone and pick your network. 📱
+          Run \`DeskBuddy-${TAG}.exe\` on your PC and set your location at **http://deskbuddy.local** ⚙️
 
           ### 📶 Update over Wi-Fi
           \`\`\`bash
@@ -91,3 +93,26 @@ jobs:
           body_path: notes.md
           generate_release_notes: true
           files: dist/*
+
+  agent-exe:
+    name: 🖥️ DeskBuddy.exe
+    runs-on: windows-latest
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 📦 Install deps
+        run: pip install -r agent/requirements.txt pyinstaller
+      - name: 🏗️ Build
+        run: python agent/build_exe.py
+      - name: 🏷️ Name it
+        shell: bash
+        run: mv agent/dist/DeskBuddy.exe "agent/dist/DeskBuddy-${TAG}.exe"
+      - name: 🚀 Attach to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          files: agent/dist/DeskBuddy-*.exe

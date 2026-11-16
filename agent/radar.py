@@ -20,9 +20,15 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-HERE = Path(__file__).resolve().parent
-CONFIG = HERE / "config.json"
-DATA = HERE / "data"
+import os
+import sys
+
+# Running as DeskBuddy.exe (PyInstaller) -> keep user data in %LOCALAPPDATA%\DeskBuddy
+FROZEN = getattr(sys, "frozen", False)
+APP_DIR = (Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "DeskBuddy") if FROZEN     else Path(__file__).resolve().parent
+APP_DIR.mkdir(parents=True, exist_ok=True)
+CONFIG = APP_DIR / "config.json"
+DATA = APP_DIR / "data"
 UA = {"User-Agent": "DeskBuddy/2.0 (+https://github.com/Ren0X1/DeskBuddy)"}
 ADSB = "https://api.adsb.lol/v2"
 CHUNK = 1280  # must match ART_CHUNK in firmware config.h
@@ -345,6 +351,21 @@ class Radar:
             self.cfg = load_config()
             self.cfg[mode]["enabled"] = not self.cfg[mode]["enabled"]
             save_config(self.cfg)
+
+    def apply_device(self, msg: dict) -> None:
+        """DeskBuddy's web panel is the source of truth: mirror its settings into config.json."""
+        with self.lock:
+            cfg = load_config()
+            before = json.dumps(cfg, sort_keys=True)
+            h = msg.get("home") or {}
+            if h.get("set"):
+                cfg["home"] = {"lat": h["lat"], "lon": h["lon"], "city": h.get("city", "")}
+            for key in ("radar", "spotlight"):
+                cfg[key].update({k: v for k, v in (msg.get(key) or {}).items()})
+            if json.dumps(cfg, sort_keys=True) != before:
+                save_config(cfg)
+                self.log.info("settings updated from DeskBuddy")
+            self.cfg = cfg
 
     def reload(self) -> None:
         with self.lock:

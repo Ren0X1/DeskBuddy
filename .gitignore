@@ -23,3 +23,7 @@ screenshots/
 # radar: your home coordinates + downloaded map data
 agent/config.json
 agent/data/
+
+# PyInstaller
+agent/build/
+agent/dist/

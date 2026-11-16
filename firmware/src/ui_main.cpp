@@ -4,6 +4,7 @@
 #include <time.h>
 #include "app.h"
 #include "hud.h"
+#include "settings.h"
 #include "theme.h"
 
 static lv_obj_t *tv, *dots[TILE_COUNT];
@@ -23,9 +24,9 @@ static bool timeValid(struct tm& ti) { return getLocalTime(&ti, 0) && ti.tm_year
 bool isNight() {
   struct tm ti;
   if (!timeValid(ti)) return false;
-  return NIGHT_START_HOUR > NIGHT_END_HOUR
-             ? (ti.tm_hour >= NIGHT_START_HOUR || ti.tm_hour < NIGHT_END_HOUR)
-             : (ti.tm_hour >= NIGHT_START_HOUR && ti.tm_hour < NIGHT_END_HOUR);
+  if (cfg.nightStart == cfg.nightEnd) return false;
+  return cfg.nightStart > cfg.nightEnd ? (ti.tm_hour >= cfg.nightStart || ti.tm_hour < cfg.nightEnd)
+                                       : (ti.tm_hour >= cfg.nightStart && ti.tm_hour < cfg.nightEnd);
 }
 
 // ================================================================= clock (style C: phosphor CRT)
@@ -368,14 +369,14 @@ void uiDebug(const char* cmd) {
 static void policy() {
   bool on = pcOnline();
   bool night = isNight();
-  bool idle = on && pc.idle >= IDLE_EYE_SECONDS && !media.playing;
+  bool idle = cfg.eyesOn && on && pc.idle >= cfg.idleEyeSec && !media.playing;
 
   // idle eye (an alert owns the screen while it's up)
   if (!forceEye && !alertActive()) {
-    if (on && pc.idle < IDLE_EYE_SECONDS) eyeClearDismiss();
+    if (on && pc.idle < cfg.idleEyeSec) eyeClearDismiss();
     if (idle && !eyeActive() && !eyeDismissed()) eyeShow();
     if (eyeActive() && !idle) eyeHide();
-    if (eyeActive()) eyeSetSleepy(night || pc.idle >= IDLE_SLEEPY_SECONDS);
+    if (eyeActive()) eyeSetSleepy(night || pc.idle >= cfg.sleepySec);
   }
 
   // PC asleep/off -> park on the clock
@@ -387,7 +388,7 @@ static void policy() {
   // backlight
   uint8_t b = hwUserBrightness();
   bool touched = millis() - lastTouchMs() < WAKE_ON_TOUCH_MS;
-  if (night) b = min<uint8_t>(b, NIGHT_MAX_BRIGHTNESS);
+  if (night) b = min<uint8_t>(b, cfg.nightMax);
   if (asleep && !touched) b = night ? 0 : min<uint8_t>(b, PC_OFF_BRIGHTNESS);
   if (eyeActive() && night && !touched) b = min<uint8_t>(b, 12);
   hwSetTarget(b);

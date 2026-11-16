@@ -130,7 +130,9 @@ void musicBuild(lv_obj_t* t) {
   lv_obj_add_event_cb(view, draw, LV_EVENT_DRAW_MAIN, NULL);
 
   artImg = lv_img_create(t);
-  lv_obj_set_pos(artImg, ART_X, ART_Y);
+  // lv_img_set_src() re-centres the pivot, so offset the 80 px image: scaled from its centre
+  // to 64 px it lands exactly in the target box
+  lv_obj_set_pos(artImg, ART_X - (ART_SIZE - 64) / 2, ART_Y - (ART_SIZE - 64) / 2);
   lv_obj_add_flag(artImg, LV_OBJ_FLAG_HIDDEN);
   artDsc.header.always_zero = 0;
   artDsc.header.w = ART_SIZE;
@@ -139,8 +141,6 @@ void musicBuild(lv_obj_t* t) {
   artDsc.data_size = sizeof(artPixels);
   artDsc.data = (const uint8_t*)artPixels;
   lv_img_set_zoom(artImg, 256 * 64 / ART_SIZE);  // 80 px cover -> 64 px box
-  lv_obj_set_style_transform_pivot_x(artImg, 0, 0);
-  lv_obj_set_style_transform_pivot_y(artImg, 0, 0);
 
   key(t, 38, 190, 22, 20, "voldn");
   key(t, 67, 190, 30, 20, "prev");
