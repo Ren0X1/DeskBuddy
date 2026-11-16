@@ -21,7 +21,7 @@ struct Plane {
 static Plane planes[MAX_PLANES];
 static int nPlanes = 0, selected = 0;
 static float rangeKm = 15;
-static bool radarOn = false;
+static bool radarOn = false, radarNew = false, radarAuto = true;
 static uint32_t radarRx = 0;
 static char selCs[10] = "";
 
@@ -230,11 +230,20 @@ void radarOnJson(JsonDocument& d) {
     if (!strcmp(planes[i].cs, selCs)) selected = i;
   if (nPlanes) strlcpy(selCs, planes[selected].cs, sizeof selCs);
 
-  if (newcomer && nPlanes && eyeActive()) eyeReact("Avión a la vista");
-  if (autoShow && newcomer && nPlanes && !alertOn && !eyeActive() && !media.playing &&
-      millis() - lastTouchMs() > 15000 && uiTile() != TILE_RADAR)
-    uiGoTile(TILE_RADAR);
+  radarAuto = autoShow;
+  if (newcomer && nPlanes) {
+    radarNew = true;  // the screen manager in ui_main.cpp decides what to show
+    if (!autoShow && eyeActive()) eyeReact("Avión a la vista");
+  }
 }
+
+bool radarTakeNewcomer() {
+  bool n = radarNew;
+  radarNew = false;
+  return n;
+}
+bool radarHasTraffic() { return radarOn && nPlanes > 0 && radarRx && millis() - radarRx < 20000; }
+bool radarAutoShow() { return radarAuto; }
 
 void radarFast(uint32_t dt) {
   radarSweep.bearing = fmodf(radarSweep.bearing + 360.0f * dt / SWEEP_MS, 360);
@@ -454,7 +463,9 @@ static void alertShow() {
 
   alertOn = true;
   alertEnd = millis() + shown.secs * 1000UL;
-  alPrev = lv_scr_act();
+  // the eyes never sit under an alert (hiding them later would cover the alert)
+  if (eyeActive()) eyeHide();
+  alPrev = uiMainScreen();
   lv_scr_load_anim(alScr, LV_SCR_LOAD_ANIM_FADE_ON, 400, 0, false);
   hwPoke();
 }

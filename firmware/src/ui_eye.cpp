@@ -22,7 +22,8 @@ static const EyeS BASE_S = {{-42, 0, 54, 74, 20, 0, 0, 0, 1}, {42, 0, 54, 74, 20
 static const EyeS SLEEP_S = {{-42, 0, 54, 6, 20, 0, 0, 0, 1}, {42, 0, 54, 6, 20, 0, 0, 0, 1}, 0, 14, 0};
 
 static lv_obj_t *scr, *view, *prevScr;
-static bool active = false, sleepy = false, dismissed = false;
+static bool active = false, sleepy = false, dismissed = false, cameo = false, sad = false;
+static int queue[4], qn = 0, idxSad = -1, idxCry = -1;
 static int cur = -1;
 static uint32_t t0 = 0, restUntil = 0, animTotal[EYE_ANIM_COUNT];
 static EyeS st = BASE_S;
@@ -426,6 +427,8 @@ void eyeInit() {
     if (a >= 0) excluded[a] = true;
   }
   idxSleep = findAnim("Dormir");
+  idxSad = findAnim("Triste");
+  idxCry = findAnim("Llorar");
   idxBoot = findAnim("Arranque");
 
   scr = lv_obj_create(NULL);
@@ -444,18 +447,67 @@ void eyeSetSleepy(bool s) {
   if (!s) play(findAnim("Despertar"));
 }
 
-void eyeShow() {
+static void popIn() {
+  sleepy = sad = false;
+  qn = 0;
+  prevScr = uiMainScreen();  // always return to the main screen, never to ourselves
+  lv_scr_load_anim(scr, LV_SCR_LOAD_ANIM_FADE_ON, 300, 0, false);
+}
+
+// pop in, play these animations in order, pop out (e.g. "Arranque" + "Saludo" on connect)
+void eyeCameoSeq(const char* const* names, int n) {
+  bool wasActive = active;
+  if (!wasActive) popIn();
+  active = cameo = true;
+  sad = sleepy = false;
+  qn = 0;
+  for (int i = 1; i < n && qn < 4; i++) {
+    int a = findAnim(names[i]);
+    if (a >= 0) queue[qn++] = a;
+  }
+  play(findAnim(names[0]));
+}
+
+// PC gone: stay sad (now and then a tear) until it's back or the screen goes off
+void eyeSad() {
+  if (!active) popIn();
+  active = sad = true;
+  cameo = false;
+  cur = -1;
+  qn = 0;
+}
+
+bool eyeIsSad() { return active && sad; }
+
+void eyeCameo() {  // pop in, play one fun animation, pop out
   if (active) return;
+  int a;
+  do a = random(EYE_ANIM_COUNT);  // something with a bit of show: at least 1.5 s
+  while (excluded[a] || a == idxSleep || animTotal[a] < 1500);
+  popIn();
+  active = cameo = true;
+  play(a);
+}
+
+bool eyeIsCameo() { return active && cameo; }
+
+void eyeShow() {
+  if (active) {
+    cameo = false;  // a cameo that turns into a real idle session stays up
+    return;
+  }
+  cameo = false;
   active = true;
   sleepy = false;
   play(idxBoot);
-  prevScr = lv_scr_act();
+  prevScr = uiMainScreen();  // always return to the main screen, never to ourselves
   lv_scr_load_anim(scr, LV_SCR_LOAD_ANIM_FADE_ON, 500, 0, false);
 }
 
 void eyeHide() {
   if (!active) return;
-  active = false;
+  active = cameo = sad = false;
+  qn = 0;
   cur = -1;
   lv_scr_load_anim(prevScr, LV_SCR_LOAD_ANIM_FADE_ON, 300, 0, false);
 }
@@ -476,10 +528,32 @@ void eyeTick() {
     uint32_t tau = now - t0;
     if (tau >= animTotal[cur]) {
       cur = -1;
+      if (sad) {
+        lv_obj_invalidate(view);
+        return;
+      }
+      if (cameo && qn) {  // next animation of a sequence
+        play(queue[0]);
+        for (int i = 1; i < qn; i++) queue[i - 1] = queue[i];
+        qn--;
+        lv_obj_invalidate(view);
+        return;
+      }
+      if (cameo) {
+        eyeHide();
+        return;
+      }
       st = BASE_S;
       restUntil = now + random(1200, 4200);
     } else {
       st = sample(cur, tau);
+    }
+  } else if (sad) {  // hold the sad face, cry every so often
+    static const int SAD_HOLD = 1000;
+    st = sample(idxSad, SAD_HOLD);
+    if ((int32_t)(now - restUntil) >= 0) {
+      play(idxCry);
+      restUntil = now + random(6000, 12000);
     }
   } else if (!sleepy && (int32_t)(now - restUntil) >= 0) {
     pickNext();

@@ -63,6 +63,7 @@ const char* netSsid();
 void uiInit();
 void uiGoTile(int tile, bool anim = true);
 int uiTile();
+lv_obj_t* uiMainScreen();
 void uiOtaProgress(int pct);
 void uiPortal(bool on);
 void uiOnMediaStarted();
@@ -83,6 +84,10 @@ void alertOnJson(JsonDocument& d);
 void alertOnMapChunk(const uint8_t* p, int n);
 void alertTick();
 bool alertActive();
+bool radarTakeNewcomer();
+bool radarHasTraffic();
+bool radarAutoShow();
+float musicLevel();
 void alertDebug();
 
 // ui_eye.cpp
@@ -94,5 +99,10 @@ bool eyeActive();
 bool eyeDismissed();
 void eyeClearDismiss();
 void eyeSetSleepy(bool s);
-void eyePlay(int idx);          // debug / triggers
+void eyePlay(int idx);
+void eyeCameo();
+void eyeCameoSeq(const char* const* names, int n);
+void eyeSad();
+bool eyeIsSad();
+bool eyeIsCameo();          // debug / triggers
 void eyeReact(const char* name); // play an animation by name if the eyes are up

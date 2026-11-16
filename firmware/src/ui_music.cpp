@@ -170,6 +170,8 @@ void musicTick() {
   }
 }
 
+float musicLevel() { return max(vl, vr); }
+
 void musicFast() {
   vl = vuTargetL > vl ? vl + (vuTargetL - vl) * 0.6f : vl * 0.86f;
   vr = vuTargetR > vr ? vr + (vuTargetR - vr) * 0.6f : vr * 0.86f;

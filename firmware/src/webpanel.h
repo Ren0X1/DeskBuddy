@@ -68,6 +68,8 @@ button:hover,.btn:hover{background:var(--f)} .warn{color:var(--a);border-color:v
 <label class="tg"><input type="checkbox" id="eyes">OJOS CUANDO NO USAS EL PC</label>
 <div class="row"><label>OJOS TRAS (MIN)<input id="idle" type="number" min="1" max="60"></label>
 <label>DORMIR TRAS (MIN)<input id="sleep" type="number" min="1" max="120"></label></div>
+<label class="tg"><input type="checkbox" id="cameos">OJOS AL AZAR DE VEZ EN CUANDO</label>
+<label>CADA (MIN, APROX.)<input id="cameomin" type="number" min="2" max="120"></label>
 <label>APAGAR PANTALLA SIN DATOS DEL PC (MIN)<input id="pcoff" type="number" min="1" max="60"></label>
 <div class="hint">Se vuelve a encender sola en cuanto el PC envía datos, o al tocarla.</div></section>
 
@@ -91,7 +93,7 @@ async function load(){const c=await (await fetch("/api/config")).json();
  $("spotOn").checked=c.spotlight.enabled;$("secs").value=c.spotlight.show_seconds;$("rep").value=c.spotlight.repeat_minutes;
  $("wcs").value=c.spotlight.watch_callsigns.join(",");$("wty").value=c.spotlight.watch_types.join(",");
  const s=c.screen;$("ns").value=s.night_start;$("ne").value=s.night_end;$("nm").value=s.night_max;$("br").value=s.brightness;
- $("eyes").checked=s.eyes;$("idle").value=Math.round(s.idle_eye_s/60);$("sleep").value=Math.round(s.sleepy_s/60);$("pcoff").value=Math.round(s.pc_off_s/60);
+ $("eyes").checked=s.eyes;$("idle").value=Math.round(s.idle_eye_s/60);$("sleep").value=Math.round(s.sleepy_s/60);$("pcoff").value=Math.round(s.pc_off_s/60);$("cameos").checked=s.cameos;$("cameomin").value=s.cameo_min;
  live.forEach(([i,o,u])=>$(o).textContent=$(i).value+u)}
 async function status(){try{const s=await (await fetch("/api/status")).json();
  $("st").innerHTML=`WIFI <b>${s.ssid}</b> ${s.rssi} dBm · PC <b class="${s.pc?"":"bad"}">${s.pc?s.host:"SIN ENLACE"}</b> · UP <b>${s.up}</b>`;
@@ -101,7 +103,7 @@ $("save").onclick=async()=>{msg("TRANSMITIENDO...");
  const body={home:{lat:+$("lat").value,lon:+$("lon").value,city:$("city").value.trim()},
   radar:{enabled:$("radarOn").checked,radius_km:+$("rk").value,auto_show:$("auto").checked},
   spotlight:{enabled:$("spotOn").checked,show_seconds:+$("secs").value,repeat_minutes:+$("rep").value,watch_callsigns:list($("wcs").value),watch_types:list($("wty").value)},
-  screen:{night_start:+$("ns").value,night_end:+$("ne").value,night_max:+$("nm").value,brightness:+$("br").value,eyes:$("eyes").checked,idle_eye_s:+$("idle").value*60,sleepy_s:+$("sleep").value*60,pc_off_s:+$("pcoff").value*60}};
+  screen:{night_start:+$("ns").value,night_end:+$("ne").value,night_max:+$("nm").value,brightness:+$("br").value,eyes:$("eyes").checked,idle_eye_s:+$("idle").value*60,sleepy_s:+$("sleep").value*60,pc_off_s:+$("pcoff").value*60,cameos:$("cameos").checked,cameo_min:+$("cameomin").value}};
  const r=await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
  msg(r.ok?"GUARDADO ✓":"ERROR "+r.status);if(r.ok)load()};
 $("find").onclick=async()=>{const q=$("q").value.trim();if(!q)return;$("res").textContent="BUSCANDO...";

@@ -191,15 +191,35 @@ class Routes:
                 return None, None
             budget[0] -= 1
         o = d = None
-        try:
-            r = http_json(f"https://hexdb.io/api/v1/route/icao/{cs}", 10).get("route", "")
-            parts = r.split("-")
-            if len(parts) >= 2:
-                o, d = self.airport(parts[0]), self.airport(parts[-1])
+        try:  # adsbdb.com knows more routes; hexdb.io is the fallback
+            fr = http_json(f"https://api.adsbdb.com/v0/callsign/{cs}", 10)["response"]["flightroute"]
+            o, d = self._from_adsbdb(fr["origin"]), self._from_adsbdb(fr["destination"])
         except Exception:
             pass
-        self.routes[cs] = (o, d, time.time())
+        if not (o and d):
+            try:
+                r = http_json(f"https://hexdb.io/api/v1/route/icao/{cs}", 10).get("route", "")
+                parts = r.split("-")
+                if len(parts) >= 2:
+                    o, d = self.airport(parts[0]), self.airport(parts[-1])
+            except Exception:
+                pass
+        # an unknown route is retried after 30 min instead of 6 h
+        self.routes[cs] = (o, d, time.time() if (o and d) else time.time() - 6 * 3600 + 1800)
         return o, d
+
+    def _from_adsbdb(self, a: dict) -> dict | None:
+        icao = (a or {}).get("icao_code")
+        if not icao:
+            return None
+        import re
+        city = (a.get("municipality") or "").split(",")[0]
+        city = re.sub(r"\s+(Island|Islands)$", "", city).strip()  # "Fuerteventura Island" -> "Fuerteventura"
+        known = self.airport(icao)
+        if known:
+            return dict(known, city=city or known.get("city", "").split(",")[0].strip())
+        return {"icao": icao, "iata": a.get("iata_code") or icao, "city": city,
+                "lat": a.get("latitude"), "lon": a.get("longitude")}
 
     @staticmethod
     def label(a: dict | None) -> str:

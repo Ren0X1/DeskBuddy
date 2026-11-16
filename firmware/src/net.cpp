@@ -296,6 +296,10 @@ static void apiStatus() {
   d["up"] = up;
   d["heap"] = ESP.getFreeHeap();
   d["backlight"] = hwTarget();
+  d["tile"] = uiTile();
+  d["eyes"] = eyeActive();
+  d["sad"] = eyeIsSad();
+  d["alert"] = alertActive();
   String out;
   serializeJson(d, out);
   server.send(200, "application/json", out);

@@ -15,6 +15,7 @@ void settingsLoad() {
   if (cfg.idleEyeSec < 30) cfg.idleEyeSec = def.idleEyeSec;
   if (cfg.sleepySec < 60) cfg.sleepySec = def.sleepySec;
   if (cfg.radiusKm < 2) cfg.radiusKm = def.radiusKm;
+  if (cfg.cameoMin < 2 || cfg.cameoMin > 120) cfg.cameoMin = def.cameoMin;
   // migrate the home pushed by older agents (stored by net.cpp)
   if (!cfg.hasHome) {
     Preferences w;
@@ -65,6 +66,8 @@ void settingsToJson(JsonDocument& d) {
   sc["sleepy_s"] = cfg.sleepySec;
   sc["eyes"] = cfg.eyesOn;
   sc["pc_off_s"] = cfg.pcOffSec;
+  sc["cameos"] = cfg.cameos;
+  sc["cameo_min"] = cfg.cameoMin;
 }
 
 template <typename T>
@@ -127,5 +130,7 @@ bool settingsFromJson(JsonVariantConst d) {
   ch |= upd<uint16_t>(cfg.sleepySec, sc["sleepy_s"], 60, 7200);
   ch |= updB(cfg.eyesOn, sc["eyes"]);
   ch |= upd<uint16_t>(cfg.pcOffSec, sc["pc_off_s"], 30, 3600);
+  ch |= updB(cfg.cameos, sc["cameos"]);
+  ch |= upd<uint8_t>(cfg.cameoMin, sc["cameo_min"], 2, 120);
   return ch;
 }

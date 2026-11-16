@@ -22,6 +22,8 @@ struct Settings {
   bool eyesOn = true;
   // appended fields keep older saved blobs loadable (prefix-compatible)
   uint16_t pcOffSec = 120;  // no data from the PC for this long -> backlight off
+  bool cameos = true;       // eyes pop in at random even while you use the PC
+  uint8_t cameoMin = 12;    // average minutes between cameos
 };
 
 extern Settings cfg;
