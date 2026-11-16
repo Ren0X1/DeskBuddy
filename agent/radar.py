@@ -494,8 +494,8 @@ class Radar:
                 time.sleep(0.03)
         alt = a.get("alt_baro") if isinstance(a.get("alt_baro"), (int, float)) else 0
         model = clean_model(a.get("desc") or "") or self.routes.model(a["hex"]) or a.get("t") or ""
-        if a.get("r"):
-            model = f"{model} · {a['r']}" if model else a["r"]
+        if not model and a.get("r"):  # registration only when there's no model to show
+            model = a["r"]
         msg = {"t": "alert", "id": aid, "lbl": label, "c": cs[:11], "m": model[:39],
                "ro": self.routes.label(o)[:39], "rd": self.routes.label(d)[:39],
                "em": emergency, "sec": int(secs),

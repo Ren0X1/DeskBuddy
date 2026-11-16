@@ -45,10 +45,23 @@ An old-school phosphor radar 📡 of the sky around your home. Blips light up as
 - Distance, altitude and speed. Tap to cycle through the aircraft
 - Jumps to the radar when a new plane enters your airspace
 
-### 🚨 Spotlight alerts
-When something interesting is flying **anywhere in the world**, DeskBuddy shows it full-screen for a minute 🌍. You get a world map with the route flown and the way ahead, all behind the radar sweep.
-- 🆘 **Emergencies**: squawk 7700, 7600 and 7500. These are the flights that top "most tracked" lists
-- ⭐ **Notable aircraft**: Air Force One, Airbus Beluga, Boeing Dreamlifter, An-124… Add your own
+### 🚨 Spotlight alerts: emergency vs. notable aircraft
+When something interesting is flying **anywhere in the world**, DeskBuddy takes over the screen for a minute 🌍. You get a world map with the route flown (solid line), the way ahead (dashed), the departure and arrival airports and the aircraft pulsing behind the radar sweep. There are two kinds:
+
+<p align="center">
+  <img src="docs/alert.png" width="220" alt="Emergency alert">
+  <img src="docs/alert_notable.png" width="220" alt="Notable aircraft alert">
+</p>
+
+| | 🔴 **EMERGENCIA** | 🟠 **AERONAVE DESTACADA** |
+|---|---|---|
+| **Fires when** | Any aircraft broadcasts an emergency squawk | An aircraft on your watch list is airborne |
+| **Codes** | `7700` general emergency · `7600` radio failure · `7500` hijack | Callsigns (`AF1`, `AF2`, `EXEC1F`, `SAM`…) and types (`A337` Beluga XL, `BLCF` Dreamlifter, `A124`, `B52`…) |
+| **Why it matters** | Something is going wrong right now. These flights shoot to the top of Flightradar24's "most tracked" list within minutes | Rare or famous aircraft people love to follow, like Air Force One or a Beluga carrying wings |
+| **Colour** | Red caption and red countdown ring | Amber caption and amber countdown ring |
+| **Priority** | Always first | When there's no emergency |
+
+Each aircraft is shown once and then rests for 2 hours. You can edit the watch list, the duration and the cooldown in the web panel.
 
 ### 👀 Robot eyes: 84 animations
 Leave the PC alone and DeskBuddy comes alive 🤖 with **84 animations** and 40 effects. Blinks, glances, winks, moods (happy, angry, sad, suspicious, sleepy…), hearts, stars, dizzy spirals, tears, a radar sweep, target lock, matrix rain, a countdown, sonar and hypnosis. Tap for something happy 😊, long-press to dismiss. At night it dozes off 😴, and it notices when a plane flies over.
